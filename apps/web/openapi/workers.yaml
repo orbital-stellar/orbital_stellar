@@ -1,0 +1,55 @@
+paths:
+  /api/workers/verdicts:
+    get:
+      summary: Retrieve verdicts by worker and ledger range
+      description: Public read endpoint for worker verdicts. Read-only audit trail.
+      parameters:
+        - name: worker
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start_ledger
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: end_ledger
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A list of verdicts with versioning metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      schema_version:
+                        type: string
+                      engine_version:
+                        type: string
+                      formula_version:
+                        type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+  /api/workers/operators:
+    get:
+      summary: Retrieve operator scores
+      description: Public read endpoint for operator reputation scores.
+      parameters:
+        - name: operator_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operator score data
