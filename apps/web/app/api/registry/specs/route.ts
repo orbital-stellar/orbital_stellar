@@ -4,7 +4,7 @@ import { validateSpec } from "@orbital-stellar/abi-registry";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const specs = await getSpecStore().getAll();
   const verdicts = await getVerdictStore().getAll();
   const verdictMap = new Map(verdicts.map((v) => [v.contractId, v]));
@@ -39,6 +39,19 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    try {
+    const scores = await fetchOperatorScores(operatorId);
+
+    return NextResponse.json({
+      meta: {
+        schema_version: '1.0.0',
+      },
+      data: scores,
+    }, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      }
 
     const registered: RegisteredSpec = {
       contractId: body.contractId,
