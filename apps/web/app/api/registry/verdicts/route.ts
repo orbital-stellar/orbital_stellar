@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerdictStore } from "@/lib/registry";
 
 import { checkRateLimit } from '@/lib/api/rate-limit'; 
-import { fetchVerdicts } from '@/lib/workers/db';
 
 export const dynamic = "force-dynamic";
 
