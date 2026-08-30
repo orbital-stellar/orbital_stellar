@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerdictStore } from "@/lib/registry";
 
-import { checkRateLimit } from '@/lib/api/rate-limit'; 
-
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
