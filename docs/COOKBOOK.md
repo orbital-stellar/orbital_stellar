@@ -21,10 +21,16 @@
 7. [Verify a webhook in a Cloudflare Worker](#7-verify-a-webhook-in-a-cloudflare-worker)
 8. [Fan out one event to multiple URLs](#8-fan-out-one-event-to-multiple-urls)
 9. [Route `webhook.failed` to a dead-letter queue](#9-route-webhookfailed-to-a-dead-letter-queue)
-10. [Render live payments in React with type narrowing](#10-render-live-payments-in-react-with-type-narrowing)
-11. [Stand up an SSE endpoint in Next.js](#11-stand-up-an-sse-endpoint-in-nextjs)
-12. [Subscribe to Soroban contract events](#12-subscribe-to-soroban-contract-events)
-13. [Unit test webhooks with deterministic jitter](#13-unit-test-webhooks-with-deterministic-jitter)
+10. [Capture an anchor audit trail](#10-capture-an-anchor-audit-trail)
+11. [Render live payments in React with type narrowing](#11-render-live-payments-in-react-with-type-narrowing)
+12. [Stand up an SSE endpoint in Next.js](#12-stand-up-an-sse-endpoint-in-nextjs)
+13. [Subscribe to Soroban contract events](#13-subscribe-to-soroban-contract-events)
+14. [Unit test webhooks with deterministic jitter](#14-unit-test-webhooks-with-deterministic-jitter)
+15. [Generate TypeScript types from a Soroban contract](#15-generate-typescript-types-from-a-soroban-contract)
+16. [Back up and restore cursor positions](#16-back-up-and-restore-cursor-positions)
+17. [Inspect or replay dead-letter-queue entries](#17-inspect-or-replay-dead-letter-queue-entries)
+18. [Subscribe to contract-specific typed events in React](#18-subscribe-to-contract-specific-typed-events-in-react)
+19. [Migrate from Horizon-only to unified ingestion](#19-migrate-from-horizon-only-to-unified-ingestion)
 
 ---
 
@@ -306,7 +312,99 @@ declare function persistToDLQ(record: unknown): Promise<void>;
 
 ---
 
-## 10. Render live payments in React with type narrowing
+## 10. Capture an anchor audit trail
+
+Compose `CursorStore` + `RetryQueue` + `DeadLetterStore` to capture payment and trustline events for a set of anchor distribution accounts into an append-only audit log. The result is replay-safe: `replay --from <cursor>` rebuilds the audit log byte-identically from any point. ✅
+
+```ts
+import { EventEngine, FileCursorStore, type NormalizedEvent } from "@orbital-stellar/pulse-core";
+import { MemoryRetryQueue, MemoryDeadLetterStore } from "@orbital-stellar/pulse-webhooks";
+import { createWriteStream } from "fs";
+
+// 1. Durable cursor store: survives process restarts.
+const cursorStore = new FileCursorStore("./.orbital-cursors");
+
+// 2. Retry queue: backs webhook delivery retries (swap for RedisRetryQueue in
+//    production so retries survive restarts).
+const retryQueue = new MemoryRetryQueue();
+
+// 3. Dead-letter store: terminal failure persistence (swap for
+//    PostgresDeadLetterStore in production for durability).
+const deadLetter = new MemoryDeadLetterStore();
+
+const engine = new EventEngine({
+  network: "testnet",
+  cursorStore,
+  streamKey: "anchor-audit",
+});
+engine.start();
+
+// Anchor distribution accounts to monitor.
+const accounts = ["GABC...", "GDEF..."];
+
+// Append-only audit log (JSON Lines, sorted keys for deterministic output).
+const auditLog = createWriteStream("./audit.jsonl", { flags: "a" });
+
+for (const account of accounts) {
+  const watcher = engine.subscribe(account, {
+    filter: (event: NormalizedEvent): boolean =>
+      event.type === "payment.received" ||
+      event.type === "payment.sent" ||
+      event.type === "trustline.added" ||
+      event.type === "trustline.removed",
+  });
+
+  watcher.on("*", (event) => {
+    const raw = event.raw as Record<string, unknown> | undefined;
+    const [ledgerStr, opIdxStr] = (raw?.id as string ?? "0-0").split("-");
+
+    const record = {
+      ledger: parseInt(ledgerStr, 10),
+      txHash: extractTxHash(raw),
+      operationIndex: parseInt(opIdxStr, 10),
+      memo: (raw?.memo as string) ?? null,
+      asset: event.asset,
+      from: "from" in event ? event.from : event.account,
+      to: "to" in event ? event.to : event.asset.split(":")[1] ?? "",
+      eventType: event.type,
+      timestamp: event.timestamp,
+      raw: event.raw,
+    };
+
+    // Stable JSON: sorted keys for byte-identical replay.
+    auditLog.write(JSON.stringify(record, sortedKeys) + "\n");
+  });
+}
+
+function extractTxHash(raw?: Record<string, unknown>): string {
+  const links = raw?._links as Record<string, unknown> | undefined;
+  const txHref = links?.transaction as Record<string, unknown> | undefined;
+  if (typeof txHref?.href === "string") {
+    return txHref.href.split("/").pop() ?? "";
+  }
+  return "";
+}
+
+function sortedKeys(_key: string, value: unknown): unknown {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(value).sort()) {
+      sorted[k] = (value as Record<string, unknown>)[k];
+    }
+    return sorted;
+  }
+  return value;
+}
+
+// Graceful shutdown.
+process.on("SIGTERM", () => { auditLog.end(); engine.stop(); });
+```
+
+**Delivery guarantee: at-least-once with idempotency keys.** The composition of `CursorStore` + `RetryQueue` + `DeadLetterStore` provides at-least-once semantics, not exactly-once. Consumers MUST deduplicate by `(ledger, operationIndex)`. A process restart between event capture and cursor flush WILL produce duplicates on restart. For a full, production-shape `AnchorService` class that wraps this composition (with CLI and replay support), see [`examples/anchor-starter/`](../examples/anchor-starter/).
+
+---
+
+## 11. Render live payments in React with type narrowing
 
 `useStellarEvent<T>` is generic - pass a narrow union as `T` to get full autocomplete and exhaustive `switch` checking. ✅
 
@@ -346,7 +444,7 @@ A `switch` over `event.type` with no `default` clause will produce a TypeScript 
 
 ---
 
-## 11. Stand up an SSE endpoint in Next.js
+## 12. Stand up an SSE endpoint in Next.js
 
 The hooks expect a backend that re-emits Orbital events as Server-Sent Events. The marketing site ships a working reference at `apps/web/app/api/events/[address]/route.ts` - copy it, strip the demo limits in `apps/web/lib/demo-limits.ts`, and you have your production SSE handler. ✅
 
@@ -405,7 +503,7 @@ The `globalThis` trick keeps one `EventEngine` alive across Next.js HMR. In prod
 
 ---
 
-## 12. Subscribe to Soroban contract events
+## 13. Subscribe to Soroban contract events
 
 Subscribes to smart-contract events by contract ID and topic filter via Stellar RPC. Same normalized-event taxonomy as classic operations, with two new types: `contract.invoked` and `contract.emitted`.
 
@@ -434,7 +532,7 @@ Decoding to typed `decodedData` requires the ABI Registry client (`@orbital-stel
 
 ---
 
-## 13. Unit test webhooks with deterministic jitter
+## 14. Unit test webhooks with deterministic jitter
 
 Inject a custom RNG into `WebhookDelivery` to make exponential backoff delays deterministic in your test suite. ✅
 
@@ -461,6 +559,341 @@ new WebhookDelivery(watcher, {
 ```
 
 Combine this with `vi.useFakeTimers()` to verify that retries happen after the exact jittered delay you expect without waiting for real-world wall clock time.
+
+---
+
+## 15. Generate TypeScript types from a Soroban contract
+
+Generate TypeScript type declarations and Zod schemas from a deployed Soroban contract's spec. ✅
+
+### Using the CLI
+
+```bash
+# Generate types from a testnet contract
+orbital typegen CBCG...YOUR_CONTRACT --out src/contract-types.ts
+
+# Target mainnet with a custom RPC endpoint
+orbital typegen CBCG...YOUR_CONTRACT \
+  --network mainnet \
+  --rpc-url https://soroban-mainnet.example.com \
+  --out src/contract-types.ts
+```
+
+### Using the binary directly (standalone generate)
+
+```bash
+# If you already have a contract spec JSON file
+abi-registry-generate ./my-contract-spec.json ./my-contract.d.ts
+```
+
+The `abi-registry-generate` binary takes a Soroban contract spec JSON file and outputs a `.d.ts` file with generated TypeScript types. It ships with `@orbital-stellar/abi-registry` and is available via `npx abi-registry-generate`.
+
+---
+
+## 16. Back up and restore cursor positions
+
+Dump or restore cursor positions from a Postgres database for migration or disaster recovery. Requires the `pg` package installed separately. ✅
+
+```bash
+# Install the pg driver (if not already available)
+npm install pg
+
+# Dump all cursors as line-delimited JSON to a file
+orbital cursor dump > cursors-backup.jsonl
+
+# Restore cursors from the backup file
+orbital cursor restore < cursors-backup.jsonl
+```
+
+The `cursor dump` command reads from the `cursor_store` table and outputs one JSON object per line. `cursor restore` reads the same format from stdin and writes back. Both commands connect to Postgres via the `PG*` environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, etc.) — the same ones `psql` uses.
+
+---
+
+## 17. Inspect or replay dead-letter-queue entries
+
+When webhook deliveries fail after all retries, entries land in the dead-letter queue (DLQ). The `orbital-dlq` CLI lets you list, dump, and replay them. ✅
+
+```bash
+# List all DLQ entries for a specific URL
+orbital-dlq dlq list --url https://your-app.com/hooks/stellar
+
+# Filter entries since a timestamp with a limit
+orbital-dlq dlq list \
+  --url https://your-app.com/hooks/stellar \
+  --since 2026-01-01T00:00:00Z \
+  --limit 50
+
+# Dump all DLQ entries as line-delimited JSON
+orbital-dlq dlq dump
+
+# Replay a specific DLQ entry (re-signs and re-delivers)
+orbital-dlq dlq replay <entry-id> --secret "$WEBHOOK_SECRET"
+```
+
+The `orbital-dlq` binary ships with `@orbital-stellar/pulse-webhooks` and is available via `npx orbital-dlq`. Set `ORBITAL_WEBHOOK_SECRET` in your environment or pass `--secret` to re-sign replayed deliveries.
+
+---
+
+## 18. Subscribe to contract-specific typed events in React
+
+Use `orbital codegen` with a contract spec to generate per-event React hooks with
+Zod runtime validation, then consume them in your components. ✅
+
+**Step 1: Generate types and hooks from a registry spec**
+
+```ts
+import { generateContractArtifacts, generateContractHooks } from "@orbital-stellar/abi-registry";
+import type { ContractSpec } from "@orbital-stellar/abi-registry";
+
+// Load the spec - from a registry client, local file, or WASM discovery
+const spec: ContractSpec = { /* ... contract spec ... */ };
+
+const artifacts = generateContractArtifacts(spec);
+// artifacts.declarations  → TypeScript interfaces + types
+// artifacts.schemas        → Zod validation schemas
+// artifacts.hooks          → React hook wrappers (e.g. useSwapExecuted)
+
+// Or use the standalone hook generator:
+const hooks = generateContractHooks(spec);
+```
+
+**Step 2: Use generated hooks in a React component**
+
+```tsx
+import { useContractEvent } from "@orbital-stellar/pulse-notify";
+import { SwapExecutedEventSchema } from "./generated/MyContract";
+
+function SwapActivity({ serverUrl, contractId }: { serverUrl: string; contractId: string }) {
+  const { event, connected, error } = useContractEvent({
+    serverUrl,
+    contractId,
+    topics: ["swap_executed"],
+    schema: SwapExecutedEventSchema, // Zod validation
+  });
+
+  if (error) return <div>Error: {error}</div>;
+  if (!connected) return <div>Connecting...</div>;
+  if (!event) return <div>Waiting for swap events...</div>;
+
+  // event.data is now validated and typed
+  return (
+    <div>
+      <p>Swap executed: {JSON.stringify(event.data)}</p>
+      <p>Ledger: {event.ledger}</p>
+    </div>
+  );
+}
+```
+
+**Step 3: Use auto-generated hook wrappers (from `orbital codegen`)**
+
+For contracts with registered schemas, `orbital codegen` emits named hooks
+like `useSwapExecuted()` that wrap `useContractEvent` with the correct
+Zod schema pre-applied:
+
+```tsx
+import { useSwapExecuted } from "@orbital-stellar/generated/MyContract";
+
+function SwapWatcher({ serverUrl, contractId }: { serverUrl: string; contractId: string }) {
+  const { event, connected } = useSwapExecuted({ serverUrl, contractId });
+
+  if (event) {
+    // event is typed as the SwapExecutedEvent interface
+    return <div>Swapped at ledger {event.ledger}: {event.data.amount}</div>;
+  }
+  return <div>Watching for swaps...</div>;
+}
+```
+
+**Connection lifecycle:**
+- One SSE connection is shared per `(contractId, topics)` regardless of how
+  many hook instances mount it - asserted by the test suite.
+- When all hook instances unmount, the connection closes and the subscription
+  count returns to zero.
+---
+
+## 19. Migrate from Horizon-only to unified ingestion
+
+Every `v1.0.0` deployment ingests through Horizon SSE, implicitly - there was no other transport. Wave 1.6 adds the CAP-67 unified event stream (Stellar RPC) as a second transport for classic asset movements, selected by an `ingestion` flag. 🛠️
+
+Migrate in three steps - `"horizon"` → `"auto"` → `"unified"` - verifying parity before each cut, and roll back by reversing the same flag. Nothing about your `NormalizedEvent` handlers changes: the taxonomy is identical on both transports, only the rail underneath moves.
+
+> **What ships today.** The `ingestion` flag itself is 🛠️ ([`ROADMAP.md`](../ROADMAP.md), Wave 1.6). The pieces this recipe leans on - the unified transport lifecycle (`soroban.unifiedEvents`), the routing decision (`resolveFamilyTransport`), and the dedupe primitives (`deriveDedupeKey`, `DedupeWindow`) - ship today ✅, so steps 0 and 1 are runnable now and steps 2-3 are the flag flips they lead to.
+
+### The three modes
+
+| Mode | `payment` / `trustlineAuth` events | Every other family | Use it when |
+| --- | --- | --- | --- |
+| `"horizon"` | Horizon SSE | Horizon SSE | Default. Exactly `v1.0.0` behavior |
+| `"auto"` | Unified stream, falling back to Horizon | Horizon SSE | Migrating, and as a steady-state safety net |
+| `"unified"` | Unified stream | Horizon SSE | RPC-first, once you trust the parity numbers |
+
+Only the `payment` and `trustlineAuth` families have CAP-67 equivalents. Offers, account options, account merges, manage data, bump sequence, trustline limits, claimable balances, and liquidity pools stay on Horizon in **every** mode - `"unified"` does not mean "no Horizon connection". Check any family against the routing matrix without starting an engine: ✅
+
+```ts
+import { resolveFamilyTransport } from "@orbital-stellar/pulse-core";
+
+resolveFamilyTransport("payment", "unified"); // "unified"
+resolveFamilyTransport("trustlineAuth", "unified"); // "unified"
+resolveFamilyTransport("offer", "unified"); // "horizon" - no CAP-67 equivalent
+resolveFamilyTransport("payment", "horizon"); // "horizon" - mode wins
+```
+
+### Step 0 - pin your current behavior explicitly
+
+Make today's implicit default explicit before you change anything, so the migration is one visible diff rather than a default shifting under you on upgrade. 🛠️
+
+```ts
+import { EventEngine } from "@orbital-stellar/pulse-core";
+
+const engine = new EventEngine({
+  network: "mainnet",
+  ingestion: "horizon", // same behavior as v1.0.0, now stated out loud
+});
+
+engine.start();
+```
+
+### Step 1 - run the unified transport in the shadow and check parity
+
+Turn the unified poller on next to Horizon. It connects, reconnects, persists its own cursor, and reports status - but it does not deliver anything to your watchers, so your handlers cannot see a difference. That is what makes this the safe first move. ✅
+
+```ts
+import { EventEngine, FileCursorStore } from "@orbital-stellar/pulse-core";
+
+const cursorStore = new FileCursorStore("./.orbital-cursors");
+
+const engine = new EventEngine({
+  network: "mainnet",
+  soroban: {
+    rpcUrl: "https://mainnet.sorobanrpc.com",
+    unifiedEvents: true, // start the CAP-67 poller alongside Horizon SSE
+  },
+  cursorStore, // give the unified stream somewhere durable to checkpoint
+});
+
+engine.start();
+
+// Parity signal: both sources should be running and advancing together.
+setInterval(() => {
+  const { horizon, unified } = engine.status().sources;
+  console.log(
+    JSON.stringify({
+      msg: "ingestion.parity",
+      horizon: { running: horizon.running, lastEventAt: horizon.lastEventAt },
+      unified: { running: unified.running, lastEventAt: unified.lastEventAt },
+    }),
+  );
+}, 30_000);
+```
+
+Watch the unified transport's own health too - lifecycle notifications carry `source: "unified"`, so you can separate RPC trouble from Horizon trouble: ✅
+
+```ts
+const watcher = engine.subscribe("GABC...");
+
+watcher.on("engine.reconnecting", (n) => {
+  if (n.source === "unified") {
+    console.warn(`Unified RPC reconnect #${n.attempt}, delay ${n.delayMs}ms`);
+  }
+});
+
+watcher.on("engine.rate_limited", (n) => {
+  if (n.source === "unified") console.warn(`Unified RPC rate-limited ${n.delayMs}ms`);
+});
+```
+
+Move on when, over a window you consider representative, `unified.lastEventAt` keeps pace with `horizon.lastEventAt` and `engine.reconnecting` from `source: "unified"` is quiet. A unified stream that is persistently behind or reconnecting is an RPC endpoint problem - fix it here, where it costs you nothing, not after the cut.
+
+### Step 2 - cut to `"auto"`
+
+`"auto"` serves asset movements from the unified stream while it is healthy and falls back to Horizon when it is not. Every other family keeps coming from Horizon as before. 🛠️
+
+```ts
+const engine = new EventEngine({
+  network: "mainnet",
+  ingestion: "auto",
+  soroban: {
+    rpcUrl: "https://mainnet.sorobanrpc.com",
+    unifiedEvents: true,
+  },
+  cursorStore,
+});
+
+engine.start();
+```
+
+This is the first step that changes where your events actually come from. It is also the step that can produce brief double observation of the same movement - see [Dedupe during the transition](#dedupe-during-the-transition) below. Many deployments stop here permanently: `"auto"` is the mode with a fallback.
+
+### Step 3 - cut to `"unified"`
+
+`"unified"` removes the Horizon fallback for asset movements. If RPC is down, those events do not arrive by another route - you find out instead of silently degrading. 🛠️
+
+```ts
+const engine = new EventEngine({
+  network: "mainnet",
+  ingestion: "unified",
+  soroban: {
+    rpcUrl: "https://mainnet.sorobanrpc.com",
+    unifiedEvents: true,
+  },
+  cursorStore,
+});
+
+engine.start();
+```
+
+Only take this step if you run an RPC endpoint you control or trust operationally. Horizon is still connected for the families with no CAP-67 equivalent, so this is a narrowing of the fallback, not a removal of Horizon.
+
+### Rollback
+
+Rollback is the same flag in reverse - `"unified"` → `"auto"` → `"horizon"` - plus a restart. There is no migration to undo and no state to reset, because each transport checkpoints to its own cursor key.
+
+```ts
+// Roll all the way back to v1.0.0 behavior.
+const engine = new EventEngine({
+  network: "mainnet",
+  ingestion: "horizon",
+  cursorStore,
+});
+
+engine.start();
+```
+
+Roll back on any of: asset-movement events arriving late relative to your Horizon baseline, sustained `engine.reconnecting` with `source: "unified"`, or a gap you can attribute to the RPC endpoint. Dropping to `"auto"` is usually enough - it restores the Horizon fallback without giving up the unified stream.
+
+### Cursors across the switch
+
+Each transport keeps its own cursor entry in the `CursorStore`, under its own key: ✅
+
+| Transport | Key with `streamKey` set | Default key |
+| --- | --- | --- |
+| Horizon SSE | `<streamKey>` | `horizon:<network>` |
+| Soroban contract events | `<streamKey>:soroban` | `soroban:<network>` |
+| CAP-67 unified stream | `<streamKey>:unified` | `unified:<network>` |
+
+Three consequences worth internalizing before you flip anything:
+
+- **Switching modes never overwrites the Horizon cursor.** Rolling back resumes Horizon from where it was, not from `"now"` - which is exactly why rollback is cheap.
+- **The two cursor values are not interchangeable.** A Horizon cursor is a paging token; a unified cursor is the RPC `getEvents` pagination cursor. Both are opaque - never copy one into the other's key, and never hand-edit either.
+- **A first cut to `"auto"`/`"unified"` with no stored unified cursor starts the unified stream from the RPC's current position**, not from your Horizon cursor. Run step 1 long enough for the unified cursor to be checkpointed and warm before the cut, and the switch is seamless. Cut cold and the window between the two positions is a gap for asset-movement events.
+
+Cursor durability rules are unchanged by any of this - `PostgresCursorStore` for active-active, the in-memory default for development only. See [`docs/cursor-format.md`](./cursor-format.md). Full unified-stream cursor semantics in `CursorStore`, including replay against `BACKFILL_STELLAR_ASSET_EVENTS` history, are tracked in Wave 1.6. 🛠️
+
+### Dedupe during the transition
+
+While both transports are live - `"auto"` steady state, an `"auto"` fallback recovery, or the moments either side of a cut - both can observe the same on-chain movement. Delivery is deduped on a key that is stable across transports: a Horizon operation record and a CAP-67 unified event for the same movement derive the *same* key, because both carry the transaction hash and the position within that transaction. ✅
+
+```ts
+import { deriveDedupeKey, DedupeWindow } from "@orbital-stellar/pulse-core";
+
+const window = new DedupeWindow(10_000); // bounded: oldest key evicted at capacity
+
+const key = deriveDedupeKey({ txHash: "abc123...", index: 0 });
+if (window.seenBefore(key)) return; // already delivered by the other transport
+```
+
+The guarantee is **at-most-once delivery within the window**, not globally. `DedupeWindow` is bounded by design - memory stays flat no matter how many keys pass through - so a duplicate separated by more than `capacity` intervening events is not caught. Size the capacity above the number of events you expect inside your longest fallback flap, and keep your handlers idempotent regardless. Wiring this into the engine's delivery path ahead of watcher fan-out is 🛠️; the key derivation and window are usable now.
 
 ---
 

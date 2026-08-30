@@ -73,7 +73,9 @@ function installMockServer(simulateTransaction: ReturnType<typeof vi.fn>): MockS
   return server;
 }
 
-/** Routes simulateTransaction calls to list_versions / get_version based on the invoked function name. */
+const MAX_PAGE_SIZE = 25;
+
+/** Routes simulateTransaction calls to list_versions / list_versions_paged / get_version based on the invoked function name. */
 function routingSimulate(opts: { versions: string[]; records: Record<string, xdr.ScVal> }) {
   return vi
     .fn()
@@ -82,6 +84,23 @@ function routingSimulate(opts: { versions: string[]; records: Record<string, xdr
         const op = tx.operations[0] as unknown as { func: xdr.HostFunction };
         const invocation = op.func.invokeContract();
         const fnName = invocation.functionName().toString();
+
+        if (fnName === "list_versions_paged") {
+          const args = invocation.args();
+          const start = Number((args[2] as xdr.ScVal).u32());
+          const limit = Math.min(Number((args[3] as xdr.ScVal).u32()), MAX_PAGE_SIZE);
+          const page = opts.versions.slice(start, start + limit);
+          const nextCursor = start + limit < opts.versions.length ? start + limit : null;
+          return {
+            result: {
+              retval: xdr.ScVal.scvVec([
+                xdr.ScVal.scvVec(page.map((v) => xdr.ScVal.scvString(v))),
+                nextCursor !== null ? xdr.ScVal.scvU32(nextCursor) : xdr.ScVal.scvVoid(),
+              ]),
+            },
+          };
+        }
+
         if (fnName === "list_versions") {
           return {
             result: {
@@ -222,6 +241,32 @@ describe("OnChainAbiRegistryClient", () => {
     expect(await client.getSpecAt(TARGET_CONTRACT_ID, 150)).toEqual(specV1);
     expect(await client.getSpecAt(TARGET_CONTRACT_ID, 250)).toEqual(specV2);
     expect(await client.getSpecAt(TARGET_CONTRACT_ID, 50)).toBeNull();
+  });
+
+  it("clears cached records and specs so a subsequent lookup re-reads the chain", async () => {
+    const spec = testSpec();
+    const blob = JSON.stringify(spec);
+    const simulate = routingSimulate({
+      versions: ["1.0.0"],
+      records: {
+        "1.0.0": specRecordScVal({
+          version: "1.0.0",
+          specHash: createHash("sha256").update(blob).digest(),
+          pointer: "https://example.com/spec.json",
+          publisher: PUBLISHER_ADDRESS,
+        }),
+      },
+    });
+    installMockServer(simulate);
+    const transport = vi.fn().mockResolvedValue({ ok: true, text: async () => blob });
+    const client = makeClient({ transport: transport as unknown as typeof fetch });
+
+    await client.getSpec(TARGET_CONTRACT_ID);
+    client.clearCache();
+    await client.getSpec(TARGET_CONTRACT_ID);
+
+    expect(simulate).toHaveBeenCalledTimes(4); // list_versions + get_version, twice total
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 
   it("caches resolved specs - a second getSpec call does not re-simulate", async () => {

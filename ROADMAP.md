@@ -223,15 +223,15 @@ not compete with it - it standardizes what SEP-48 leaves open: contracts
 deployed *before* SEP-48 existed, off-chain registry verification, and the
 semantic layer above raw schemas.
 
-- [ ] Draft SEP covering (a) an off-chain schema registry with a verification
+- [x] Draft SEP covering (a) an off-chain schema registry with a verification
   pipeline cross-checking against on-chain `contractspec`, (b) **retroactive
   schema attestation** for pre-SEP-48 contracts already deployed on mainnet,
   and (c) a semantic taxonomy and entity-label format on top of raw event
   schemas
-- [ ] SEP-48 compatibility clause: an embedded SEP-48 event spec, when
+- [x] SEP-48 compatibility clause: an embedded SEP-48 event spec, when
   present, is the canonical schema source; the registry adds attestation and
   semantics on top, never a competing schema
-- [ ] Reference-implementation checklist mapping every SEP clause to code in this repo
+- [x] Reference-implementation checklist mapping every SEP clause to code in this repo
 - [ ] Submit as a draft PR to `stellar/stellar-protocol`
 
 ### Wave 2.2 - `orbital codegen`
@@ -254,7 +254,7 @@ semantic layer above raw schemas.
 
 - [ ] Human-readable event taxonomy on top of raw topics (e.g. `swap.executed`, `loan.liquidated`) with community-submitted mappings
 - [ ] Entity labels - verified contract → protocol/deployer/asset-issuer attribution - with a public submission and review flow
-- [ ] Labels and taxonomy published as **open data** (see [`docs/open-source-policy.md`](./docs/open-source-policy.md) - the data is open, the operated service is the product)
+- [x] Labels and taxonomy published as **open data** (see [`docs/open-source-policy.md`](./docs/open-source-policy.md) - the data is open, the operated service is the product)
 
 ### Wave 2.4 - Hosted registry (operated)
 

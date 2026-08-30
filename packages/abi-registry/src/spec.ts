@@ -208,6 +208,28 @@ export type ContractSpec = {
   readonly pointer?: string;
 };
 
+// ── Spec provenance ──────────────────────────────────────────────────────────
+
+/**
+ * Identifies where a resolved spec originated in the resolution chain.
+ *
+ * - `sep48`     – embedded `#[contractevent]` entries in the contract's WASM
+ *                 (`contractspecv0` section, protocol-23+). Canonical source.
+ * - `registry`  – on-chain Orbital ABI registry attestation.
+ * - `wellKnown` – bundled offline well-known specs (USDC, EURC, etc.).
+ * - `discovery` – auto-discovered via `discoverContractSpec` (WASM fetch + parse).
+ */
+export type SpecSource = "sep48" | "registry" | "wellKnown" | "discovery";
+
+/**
+ * A {@link ContractSpec} paired with provenance metadata so consumers can
+ * display which source answered and apply source-specific trust policies.
+ */
+export type ResolvedSpec = {
+  readonly spec: ContractSpec;
+  readonly specSource: SpecSource;
+};
+
 // ── Runtime validation ────────────────────────────────────────────────────────
 
 /** Result returned by {@link validateSpec}. */
@@ -338,7 +360,8 @@ function validateFunctionSpec(fn: unknown, path: string, errors: string[]): void
   validateTypeSpec(fn["returns"], `${path}.returns`, errors);
 }
 
-function validateEventSpec(ev: unknown, path: string, errors: string[]): void {
+/** Validates one {@link EventSpec}, appending any problems found to `errors`. Exported for reuse by other schemas built on the same event-shape (e.g. attestation documents). */
+export function validateEventSpec(ev: unknown, path: string, errors: string[]): void {
   if (!isRecord(ev)) {
     errors.push(`${path}: must be an object`);
     return;

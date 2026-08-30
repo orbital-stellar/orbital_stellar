@@ -9,7 +9,13 @@ import { fullJitterBackoffMs } from "./backoff.js";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** CAP-67 (SEP-41) standard event topic names for Stellar asset contracts. */
-export const CAP_67_EVENT_TOPICS = ["transfer", "mint", "burn", "clawback"] as const;
+export const CAP_67_EVENT_TOPICS = [
+  "transfer",
+  "mint",
+  "burn",
+  "clawback",
+  "set_authorized",
+] as const;
 
 /**
  * Pre-built Soroban event filters matching any CAP-67 topic as the first topic
@@ -21,7 +27,26 @@ const CAP_67_TOPIC_FILTERS: SorobanEventFilter[] = [
   { type: "contract", topics: [["AAAADwAAAARtaW50"]] },
   { type: "contract", topics: [["AAAADwAAAARidXJu"]] },
   { type: "contract", topics: [["AAAADwAAAAhjbGF3YmFjaw=="]] },
+  { type: "contract", topics: [["AAAADwAAAA5zZXRfYXV0aG9yaXplZAAA"]] },
 ];
+
+/**
+ * The Protocol version CAP-67 (the unified event stream) shipped in.
+ * {@link rpcSupportsUnifiedEvents} uses this to decide `"auto"` ingestion
+ * mode's fallback (issue 6.12).
+ */
+export const CAP_67_MIN_PROTOCOL_VERSION = 23;
+
+/**
+ * Whether a probed Soroban RPC supports the CAP-67 unified event stream,
+ * per its {@link SorobanNetworkInfo.protocolVersion}. `undefined` - an RPC
+ * that didn't report a protocol version at all - is treated as unsupported:
+ * `"auto"` ingestion mode falls back to `"horizon"` rather than assuming
+ * support it can't confirm.
+ */
+export function rpcSupportsUnifiedEvents(info: SorobanNetworkInfo | undefined): boolean {
+  return info?.protocolVersion !== undefined && info.protocolVersion >= CAP_67_MIN_PROTOCOL_VERSION;
+}
 
 export type SorobanNetworkInfo = {
   friendbotUrl?: string;
@@ -78,6 +103,25 @@ export interface PollUnifiedEventsOptions {
   maxRetries?: number;
   initialBackoffMs?: number;
   maxBackoffMs?: number;
+  /**
+   * Called just before each retry backoff sleep, after a retryable
+   * `getEvents` failure. Lets a caller (e.g. `EventEngine`) surface
+   * reconnect/rate-limit lifecycle notifications without duplicating this
+   * loop's retry bookkeeping.
+   */
+  onRetry?: (info: { attempt: number; delayMs: number; rateLimited: boolean }) => void;
+  /**
+   * Called once a poll succeeds after one or more retries, before the
+   * internal attempt counter resets. Not called on the very first successful
+   * poll of a session (there was nothing to recover from).
+   */
+  onRecovered?: (info: { attempt: number }) => void;
+  /**
+   * Called after each successful page with an advanced cursor, so a caller
+   * can persist progress incrementally instead of only learning the final
+   * cursor once the whole loop returns (e.g. on `stop()`).
+   */
+  onCursor?: (cursor: string) => void;
 }
 
 /** Per-call options for {@link SorobanRpcClient.getEvents}. */
@@ -543,13 +587,19 @@ export class SorobanRpcClient {
 
         const result = await this.getEvents(params);
 
+        if (attempt > 0) {
+          options?.onRecovered?.({ attempt });
+        }
         attempt = 0;
 
         if (result.events.length > 0) {
           onEvents(result.events);
         }
 
-        cursor = result.cursor ?? cursor;
+        if (result.cursor !== undefined) {
+          cursor = result.cursor;
+          options?.onCursor?.(cursor);
+        }
 
         if (result.events.length < pageLimit) {
           await sleep(2_000, signal);
@@ -569,6 +619,7 @@ export class SorobanRpcClient {
             delayMs,
             code: err.code,
           });
+          options?.onRetry?.({ attempt, delayMs, rateLimited: err.code === "rate_limit" });
 
           await sleep(delayMs, signal);
         } else if (isAbortError(err)) {

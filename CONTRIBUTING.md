@@ -106,13 +106,40 @@ pnpm --filter orbital/web dev
 
 ---
 
+## Regenerating Horizon API types
+
+The raw Horizon response types in `packages/pulse-core/src/_raw-horizon.gen.ts` are
+auto-generated from the [Stellar Horizon OpenAPI description](https://github.com/stellar/stellar-docs/tree/main/openapi/horizon).
+The source URL and revision are pinned in the script header.
+
+**To regenerate:**
+
+```bash
+pnpm generate:horizon-types
+```
+
+This fetches the latest bundled OpenAPI YAML and runs `openapi-typescript` to produce
+the updated type definitions. CI will fail if the committed output is stale, so run
+this command whenever Horizon's API changes (or when CI tells you to).
+
+The generated file (`_raw-horizon.gen.ts`) is marked DO NOT EDIT. All edits to raw
+Horizon types must go through `raw-horizon.ts`, which re-exports the generated types
+and maintains backward-compatible hand-written interfaces.
+
+---
+
 ## Testing
 
 All packages use [Vitest](https://vitest.dev). Tests live in `packages/<name>/test/`.
 
 - Write a test for every new public API.
 - Update existing tests when you change behaviour.
-- Coverage is tracked with `@vitest/coverage-v8`. Run `pnpm --filter @orbital-stellar/pulse-core test:coverage` to generate a report.
+- Coverage is tracked with `@vitest/coverage-v8`. Run `pnpm --filter @orbital-stellar/pulse-core test:coverage` to generate a report. Every package enforces a coverage floor via Vitest thresholds - CI fails if coverage drops below the floor. The per-package floors are documented in each `vitest.config.ts`.
+
+To run coverage across all packages:
+```bash
+pnpm -r --if-present test:coverage
+```
 
 CI runs tests on Node 20 and Node 22. Make sure your changes pass on both.
 
@@ -145,6 +172,8 @@ Orbital participates in the [Drips Stellar Wave Program](https://drips.network).
 | `complexity:trivial` | 100 |
 | `complexity:medium` | 150 |
 | `complexity:high` | 200 |
+
+**Frozen-scope eligibility.** Issues targeting scope frozen in [ROADMAP.md's Frozen section](./ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven) — `@orbital-stellar/payments`, `@orbital-stellar/auth`, identity, `x402`, `agent-sdk`, the intent compiler, shadow-fork, reactor contracts, `@orbital-stellar/analytics`, and "10+ SEPs" meta-work — are not eligible for Wave points. In-flight frozen-scope work as of the 2026-07-16 roadmap refocus is honored in full per the `grace-window` comment on the affected issue or PR; new work against frozen scope will not be accepted. Going forward, the highest-point areas are the roadmap's Phase 2 items (SEP draft, `orbital codegen`, semantic layer, hosted registry) and Phase 3 (`@orbital-stellar/anchor-sdk`).
 
 **To claim an issue:**
 1. Comment on the issue to signal intent.
