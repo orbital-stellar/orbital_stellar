@@ -1,6 +1,6 @@
 {
   "name": "@orbital-stellar/worker-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The worker definition model for Orbital's worker layer - what a worker is, before anything runs one.",
   "license": "MIT",
   "engines": {

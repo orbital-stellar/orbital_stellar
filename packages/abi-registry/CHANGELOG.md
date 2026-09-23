@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-23
+
 ### Added
 - **Semantic taxonomy format** - `schema/taxonomy.schema.json` (JSON Schema 2020-12) is the normative format for community-submitted taxonomy entries mapping raw event topics onto dot-namespaced names (`swap.executed`, `payment.sent`). Naming rules (closed namespace-root list, casing, reserved `engine.*`/`event.*` roots) and the collision policy are documented in the schema's own `description` fields. `validateTaxonomyEntry()` is the runtime equivalent for consumers without a JSON Schema validator; `findTaxonomyConflicts()` implements the machine-checkable half of the collision policy (`duplicate-id`, `ambiguous-mapping`, `duplicate-mapping`, cleared by `supersedes`). Two worked examples ship under `schema/examples/taxonomy/`.
 - **`abi-registry verify` CLI** - `abi-registry verify <contractId> --schema <file>` wraps `verifySchema()` as one command, printing the structured verdict as text or `--json`. `--schema` accepts the canonical `ContractSpec` shape or the hand-authored well-known format. Exit codes are distinct per outcome so CI can gate on them: `0` match, `1` mismatch, `2` unverifiable (`--allow-unverifiable` to accept it), `3` usage/IO/RPC error.
