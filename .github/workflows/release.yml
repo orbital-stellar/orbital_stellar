@@ -37,20 +37,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build pulse-core
-        run: pnpm tsc -p packages/pulse-core/tsconfig.json
-
-      - name: Build pulse-webhooks
-        run: pnpm tsc -p packages/pulse-webhooks/tsconfig.json
-
-      - name: Typecheck pulse-notify
-        run: pnpm tsc --noEmit -p packages/pulse-notify/tsconfig.json
+      # pnpm build walks the workspace in dependency order, so abi-registry's
+      # dist exists before pulse-core (which imports it) compiles.
+      - name: Build all packages
+        run: pnpm build
 
       - name: Typecheck apps/web
         run: pnpm tsc --noEmit -p apps/web/tsconfig.json
-
-      - name: Build all packages
-        run: pnpm build
 
       - name: Run tests
         run: pnpm -r --if-present test
