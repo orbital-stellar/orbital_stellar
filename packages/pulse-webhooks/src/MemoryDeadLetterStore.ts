@@ -10,6 +10,7 @@ import type {
 
 export type { DeadLetterEntry, DeadLetterFilter } from "./DeadLetterStore.js";
 
+/** Observed health for a webhook target over a recent time window. */
 export interface DeliveryHealth {
   healthy: boolean;
   lastSuccess?: number;

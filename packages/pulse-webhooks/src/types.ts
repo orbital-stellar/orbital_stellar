@@ -1,8 +1,10 @@
+/** Minimal tracing span interface used by webhook delivery instrumentation. */
 export type Span = {
   setAttribute(key: string, value: string | number | boolean): void;
   end(): void;
 };
 
+/** Minimal tracer API used to start spans during delivery attempts. */
 export type Tracer = {
   startSpan(name: string, attrs?: Record<string, string | number | boolean>): Span;
 };
@@ -13,6 +15,7 @@ export type WebhookAttemptStatus = "success" | "failure";
 /** Final outcome of a delivery after all attempts/retries are resolved. */
 export type WebhookTerminalOutcome = "success" | "failure" | "dropped";
 
+/** Recording interface used by the webhook delivery pipeline for metrics. */
 export type WebhookMetrics = {
   recordAttempt(
     url: string,
@@ -24,12 +27,15 @@ export type WebhookMetrics = {
 };
 
 /** Attribute bag attached to an OpenTelemetry counter/histogram data point. */
+/** Attributes attached to OpenTelemetry metric data points. */
 export type MetricAttributes = Record<string, string | number | boolean>;
 
+/** Counter-like metric API used by webhook instrumentation. */
 export type OtelCounter = {
   add(value: number, attributes?: MetricAttributes): void;
 };
 
+/** Histogram-like metric API used by webhook instrumentation. */
 export type OtelHistogram = {
   record(value: number, attributes?: MetricAttributes): void;
 };
@@ -40,13 +46,16 @@ export type OtelHistogram = {
  * compatible object) satisfies this type, so pulse-webhooks does not need a
  * hard dependency on `@opentelemetry/api`.
  */
+/** Minimal OpenTelemetry meter interface accepted by the webhook delivery stack. */
 export type Meter = {
   createCounter(name: string, options?: { description?: string }): OtelCounter;
   createHistogram(name: string, options?: { description?: string }): OtelHistogram;
 };
 
+/** URL entry with an optional per-target timeout override. */
 export type UrlEntry = { url: string; timeoutMs?: number };
 
+/** Configuration for a single webhook delivery target. */
 export type WebhookConfig = {
   url: string | string[] | UrlEntry[];
   secret: string;
@@ -80,8 +89,10 @@ export type WebhookConfig = {
 export const DEFAULT_MAX_AGE_MS = 300_000;
 export const DEFAULT_CLOCK_SKEW_MS = 30_000;
 
+/** Supported signature versions for webhook verification. */
 export type VerifierSignatureVersion = "v1" | "v2";
 
+/** Options passed to webhook signature verification. */
 export type VerifyWebhookOptions = {
   /** Reject signatures older than this age in milliseconds. Defaults to 300_000 (5 minutes). */
   maxAgeMs?: number;

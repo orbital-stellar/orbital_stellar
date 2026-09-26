@@ -6,6 +6,7 @@ import type { RetryQueue, RetryRecord } from "./RetryQueue.js";
 // stays dependency-free and trivially testable with a mock.
 // ---------------------------------------------------------------------------
 
+/** Input payload for an SQS `sendMessage` call. */
 export type SendMessageInput = {
   QueueUrl: string;
   MessageBody: string;
@@ -32,10 +33,12 @@ export type SendMessageInput = {
   DelaySeconds?: number;
 };
 
+/** Output payload returned by an SQS `sendMessage` call. */
 export type SendMessageOutput = {
   MessageId?: string;
 };
 
+/** Input payload for an SQS `receiveMessage` call. */
 export type ReceiveMessageInput = {
   QueueUrl: string;
   MaxNumberOfMessages?: number;
@@ -52,21 +55,25 @@ export type ReceiveMessageInput = {
   WaitTimeSeconds?: number;
 };
 
+/** Raw SQS message object returned by `receiveMessage`. */
 export type SqsMessage = {
   MessageId?: string;
   ReceiptHandle?: string;
   Body?: string;
 };
 
+/** Output payload returned by an SQS `receiveMessage` call. */
 export type ReceiveMessageOutput = {
   Messages?: SqsMessage[];
 };
 
+/** Input payload for an SQS `deleteMessage` call. */
 export type DeleteMessageInput = {
   QueueUrl: string;
   ReceiptHandle: string;
 };
 
+/** Output payload returned by an SQS `deleteMessage` call. */
 export type DeleteMessageOutput = Record<string, unknown>;
 
 /**
@@ -74,6 +81,7 @@ export type DeleteMessageOutput = Record<string, unknown>;
  * `new SQSClient({...})` from `@aws-sdk/client-sqs` - no direct dependency on
  * the SDK is required.
  */
+/** Minimal SQS client surface accepted by the SQS-backed retry queue. */
 export type SqsLike = {
   sendMessage(input: SendMessageInput): Promise<SendMessageOutput>;
   receiveMessage(input: ReceiveMessageInput): Promise<ReceiveMessageOutput>;
@@ -84,6 +92,7 @@ export type SqsLike = {
 // SqsRetryQueueOptions
 // ---------------------------------------------------------------------------
 
+/** Options for configuring the SQS-backed retry queue. */
 export type SqsRetryQueueOptions = {
   /**
    * The SQS queue URL. Must be provided; typically the output of
@@ -182,6 +191,7 @@ const SQS_MAX_VISIBILITY_TIMEOUT_S = 43_200;
  * supported, but falls back to `0` for implementations (including test mocks)
  * that do not expose that attribute. Callers should treat these as approximate.
  */
+/** SQS-backed retry queue for system-managed webhook backoff. */
 export class SqsRetryQueue implements RetryQueue {
   private readonly client: SqsLike;
   private readonly queueUrl: string;

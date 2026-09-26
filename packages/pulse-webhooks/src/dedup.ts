@@ -1,10 +1,12 @@
 import type { NormalizedEvent } from "@orbital-stellar/pulse-core";
 
+/** Store used to suppress duplicate webhook events during retries or retries. */
 export interface DedupStore {
   seen(id: string): Promise<boolean>;
   mark(id: string): Promise<void>;
 }
 
+/** In-memory deduplication store for transient event deduplication. */
 export class MemoryDedupStore implements DedupStore {
   private readonly ids = new Set<string>();
 
@@ -21,6 +23,7 @@ export class MemoryDedupStore implements DedupStore {
   }
 }
 
+/** Options for deduplicating a webhook receiver pipeline. */
 export type DedupReceiverOptions = {
   idExtractor?: (event: NormalizedEvent) => string;
 };
@@ -31,6 +34,7 @@ const DEFAULT_ID_EXTRACTOR = (event: NormalizedEvent): string => {
   throw new Error("dedupReceiver: event has no raw.id string - provide a custom idExtractor");
 };
 
+/** Wrap a callback so it only runs once per deduplicated event id. */
 export function dedupReceiver(
   handler: (event: NormalizedEvent) => Promise<void>,
   store: DedupStore,

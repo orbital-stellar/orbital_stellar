@@ -6,6 +6,7 @@ function toNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/** Error raised when a Horizon SSE stream fails unexpectedly. */
 export class HorizonStreamError extends Error {
   readonly status?: number;
   readonly statusCode?: number;
@@ -48,6 +49,7 @@ export class HorizonStreamError extends Error {
   }
 }
 
+/** Error raised when a caller starts an engine that is already running. */
 export class EngineAlreadyStartedError extends Error {
   constructor() {
     super("[pulse-core] EventEngine.start() called while the SSE stream is already active.");
@@ -55,6 +57,7 @@ export class EngineAlreadyStartedError extends Error {
   }
 }
 
+/** Error raised when the configured ingestion mode is unsupported. */
 export class InvalidIngestionModeError extends Error {
   constructor(value: unknown) {
     super(
@@ -73,9 +76,11 @@ export class NetworkMismatchError extends Error {
   }
 }
 
+/** Stable machine-readable category for Soroban RPC failures. */
 export type SorobanRpcErrorCode =
   "network" | "rate_limit" | "auth" | "invalid_request" | "server" | "unknown";
 
+/** Options used to construct a Soroban RPC error. */
 export type SorobanRpcErrorOptions = {
   code: SorobanRpcErrorCode;
   retryable: boolean;
@@ -84,6 +89,7 @@ export type SorobanRpcErrorOptions = {
   cause?: unknown;
 };
 
+/** Failure returned or wrapped from a Soroban RPC request. */
 export class SorobanRpcError extends Error {
   readonly code: SorobanRpcErrorCode;
   readonly retryable: boolean;
@@ -106,6 +112,7 @@ export class SorobanRpcError extends Error {
   }
 }
 
+/** Returns true when the value is a Soroban RPC error instance. */
 export function isSorobanRpcError(error: unknown): error is SorobanRpcError {
   return error instanceof SorobanRpcError;
 }

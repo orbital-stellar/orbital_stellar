@@ -1,5 +1,6 @@
 import type { RetryQueue, RetryRecord } from "./RetryQueue.js";
 
+/** Options for the in-memory retry queue implementation. */
 export type MemoryRetryQueueOptions = {
   /** Clock source, injectable for testing. Defaults to `Date.now`. */
   now?: () => number;
@@ -29,6 +30,7 @@ type Entry = { record: RetryRecord; seq: number };
  * the canonical contract reference and for tests; use {@link RedisRetryQueue}
  * (or another backing store) for real durability.
  */
+/** In-memory retry queue used for local and test deployments. */
 export class MemoryRetryQueue implements RetryQueue {
   private readonly queued = new Map<string, Entry>();
   private readonly inFlight = new Map<string, { record: RetryRecord; expiresAt: number }>();

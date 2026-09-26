@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 
+/** A single tracked connection in the devtools registry. */
 export type DevConnection = {
   id: string;
   serverUrl: string;
@@ -17,6 +18,7 @@ function emit() {
   events.dispatchEvent(new CustomEvent("pulse-notify:change"));
 }
 
+/** Register a devtools connection entry for a Pulse Notify subscriber. */
 export function registerConnection(
   info: Omit<DevConnection, "id" | "lastEvent"> & { id?: string },
 ) {
@@ -36,6 +38,7 @@ export function registerConnection(
   return id;
 }
 
+/** Update a registered devtools connection entry in place. */
 export function updateConnection(
   id: string,
   patch: Partial<
@@ -49,20 +52,24 @@ export function updateConnection(
   emit();
 }
 
+/** Remove a devtools connection from the active registry. */
 export function unregisterConnection(id: string) {
   if (connections.delete(id)) emit();
 }
 
+/** List all currently known devtools connections, sorted by address. */
 export function listConnections(): DevConnection[] {
   return Array.from(connections.values()).sort((a, b) => a.address.localeCompare(b.address));
 }
 
+/** Subscribe to devtools connection updates. */
 export function subscribe(fn: () => void) {
   const handler = () => fn();
   events.addEventListener("pulse-notify:change", handler as EventListener);
   return () => events.removeEventListener("pulse-notify:change", handler as EventListener);
 }
 
+/** Devtools panel that renders the active Pulse Notify connection registry. */
 export function PulseNotifyDevtools(): React.ReactElement | null {
   const [state, setState] = useState<DevConnection[]>(() => listConnections());
 
@@ -111,4 +118,5 @@ export function PulseNotifyDevtools(): React.ReactElement | null {
   );
 }
 
+/** Default devtools export for Pulse Notify. */
 export default PulseNotifyDevtools;

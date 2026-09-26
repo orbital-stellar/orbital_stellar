@@ -1,3 +1,4 @@
+/** Retried webhook record pending the next delivery attempt. */
 export type RetryRecord<Event = unknown> = {
   id: string;
   event: Event;
@@ -9,6 +10,7 @@ export type RetryRecord<Event = unknown> = {
   metadata?: Record<string, unknown>;
 };
 
+/** Durable or in-memory retry queue used to schedule webhook reattempts. */
 export type RetryQueue = {
   enqueue(record: RetryRecord): Promise<void>;
   dequeue(nowMs?: number): Promise<RetryRecord | null>;

@@ -5,6 +5,7 @@ export type PgQueryResult<Row> = {
   rowCount?: number | null;
 };
 
+/** Minimal Postgres client surface accepted by the SQL dead-letter store. */
 export type PgLike = {
   query<Row = Record<string, unknown>>(
     sql: string,
@@ -12,6 +13,7 @@ export type PgLike = {
   ): Promise<PgQueryResult<Row>>;
 };
 
+/** Record inserted into the dead-letter store for a failed webhook delivery. */
 export type DeadLetterInput = {
   url: string;
   error: string;
@@ -20,6 +22,7 @@ export type DeadLetterInput = {
   failedAt?: Date | string;
 };
 
+/** Stored dead-letter record returned by the Postgres implementation. */
 export type DeadLetterRecord = {
   id: string;
   url: string;
@@ -30,6 +33,7 @@ export type DeadLetterRecord = {
   replayedAt: string | null;
 };
 
+/** Query filters used when listing dead-letter records. */
 export type DeadLetterFilter = {
   url?: string;
   failedAtFrom?: Date | string;
@@ -39,6 +43,7 @@ export type DeadLetterFilter = {
   offset?: number;
 };
 
+/** SQL dead-letter store API contract implemented by the Postgres adapter. */
 export type PostgresDeadLetterStoreApi = {
   save(record: DeadLetterInput): Promise<DeadLetterRecord>;
   put(record: DeadLetterInput): Promise<DeadLetterRecord>;
@@ -58,6 +63,7 @@ type DeadLetterRow = {
   replayed_at: Date | string | null;
 };
 
+/** Postgres-backed dead-letter store for terminal webhook failures. */
 export class PostgresDeadLetterStore implements PostgresDeadLetterStoreApi {
   private readonly tableSql: string;
 

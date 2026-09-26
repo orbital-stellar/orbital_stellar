@@ -3,10 +3,13 @@ import { StellarEventBoundary } from "./StellarEventBoundary.js";
 import type { ComponentPropsWithoutRef, CSSProperties, ReactElement } from "react";
 import { acquireEventConnection } from "./connectionPool.js";
 
+/** Status values used by the `StellarConnectionStatus` component. */
 export type StellarConnectionStatusState = "connecting" | "connected" | "error";
 
+/** Labels used to render the `StellarConnectionStatus` UI. */
 export type StellarConnectionStatusLabels = Partial<Record<StellarConnectionStatusState, string>>;
 
+/** Props for the `StellarConnectionStatus` component. */
 export type StellarConnectionStatusProps = Omit<ComponentPropsWithoutRef<"span">, "children"> & {
   serverUrl: string;
   address: string;
@@ -26,6 +29,7 @@ const STATUS_COLORS: Record<StellarConnectionStatusState, string> = {
   error: "#b91c1c",
 };
 
+/** Small status badge that reports a Stellar connection's live state. */
 export function StellarConnectionStatus({
   serverUrl,
   address,

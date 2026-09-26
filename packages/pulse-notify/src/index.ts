@@ -3,13 +3,14 @@ import { useState, useEffect, useRef } from "react";
 import { acquireEventConnection, acquireContractEventConnection } from "./connectionPool.js";
 import type {
   NormalizedEvent,
-  PaymentEvent,
-  ContractInvokedEvent,
-  ContractEmittedEvent,
+  PaymentEvent as PulsePaymentEvent,
+  ContractInvokedEvent as PulseContractInvokedEvent,
+  ContractEmittedEvent as PulseContractEmittedEvent,
 } from "@orbital-stellar/pulse-core";
 import { acquireWsConnection } from "./wsTransport.js";
 export { useStellarEventSuspense } from "./useStellarEventSuspense.js";
 
+/** Configuration for the `useStellarEvent` hook. */
 export type UseEventConfig<T extends NormalizedEvent = NormalizedEvent> = {
   serverUrl: string;
   address: string;
@@ -36,6 +37,7 @@ export type UseEventConfig<T extends NormalizedEvent = NormalizedEvent> = {
   hideAfterMs?: number;
 };
 
+/** Current state emitted by a subscription hook. */
 export type EventState<T extends NormalizedEvent = NormalizedEvent> = {
   event: T | null;
   connected: boolean;
@@ -87,9 +89,11 @@ function useVisibilityState(hideAfterMs = 30000): boolean {
   return isActive;
 }
 
+/** Subscribe to one or more Stellar event types from a Pulse server. */
 export function useStellarEvent<T extends NormalizedEvent = NormalizedEvent>(
   config: UseEventConfig<T>,
 ): EventState<T>;
+/** Subscribe to one or more Stellar event types from a Pulse server. */
 export function useStellarEvent<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,
@@ -278,7 +282,12 @@ export function useStellarEvent<T extends NormalizedEvent = NormalizedEvent>(
 // Re-export pulse-core event types. (They cannot be derived via
 // `Extract<NormalizedEvent, ...>` because NormalizedEvent is an intersection
 // with `{ timestampDate }`, over which Extract does not distribute.)
-export type { PaymentEvent, ContractInvokedEvent, ContractEmittedEvent };
+/** Pulse-core payment event type re-exported for hook consumers. */
+export type PaymentEvent = PulsePaymentEvent;
+/** Pulse-core contract-invoked event type re-exported for hook consumers. */
+export type ContractInvokedEvent = PulseContractInvokedEvent;
+/** Pulse-core contract-emitted event type re-exported for hook consumers. */
+export type ContractEmittedEvent = PulseContractEmittedEvent;
 
 /**
  * Converts a Stellar decimal amount string (e.g. "12.3456789") to stroops
@@ -298,6 +307,7 @@ function amountToStroop(amount: string): bigint | null {
   }
 }
 
+/** Current payment-focused state returned by `useStellarPayment`. */
 export type PaymentState = {
   event: PaymentEvent | null;
   connected: boolean;
@@ -306,6 +316,7 @@ export type PaymentState = {
   amountStroop: bigint | null;
 };
 
+/** Subscribe to payment events and expose the latest amount as a stroop integer. */
 export function useStellarPayment(
   serverUrl: string,
   address: string,
@@ -331,6 +342,7 @@ export function useStellarPayment(
   return { ...base, event: paymentEvent, amountStroop };
 }
 
+/** Subscribe to all events from a Stellar address and keep the latest state. */
 export function useStellarActivity<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,
@@ -366,6 +378,7 @@ export type EventSchema<T> = {
   safeParse: (data: unknown) => { success: true; data: T } | { success: false };
 };
 
+/** Configuration for the `useContractEvent` hook. */
 export type UseContractEventConfig<
   T extends ContractInvokedEvent | ContractEmittedEvent =
     ContractInvokedEvent | ContractEmittedEvent,
@@ -558,14 +571,19 @@ export function useContractEvent<
   return state;
 }
 
-export type { PulseNotifyVitePlugin } from "./vitePlugin.js";
+import type { PulseNotifyVitePlugin as PulseNotifyVitePluginContract } from "./vitePlugin.js";
 
+/** Vite plugin contract used to stub `EventSource` during SSR. */
+export type PulseNotifyVitePlugin = PulseNotifyVitePluginContract;
+
+/** Poll a Soroban contract ledger entry and keep it refreshed. */
 export {
   useContractState,
   type ContractStateOptions,
   type ContractStateResult,
 } from "./useContractState.js";
 
+/** Configuration for the `useStellarHistory` hook. */
 export type UseHistoryOptions<T extends NormalizedEvent = NormalizedEvent> = {
   token?: string;
   /** Maximum number of events to retain in FIFO order. Defaults to 100. */
@@ -575,12 +593,14 @@ export type UseHistoryOptions<T extends NormalizedEvent = NormalizedEvent> = {
   hideAfterMs?: number;
 };
 
+/** State returned by `useStellarHistory`, including the retained event history. */
 export type HistoryState<T extends NormalizedEvent = NormalizedEvent> = EventState<T> & {
   history: T[];
 };
 
 // ─── useStellarAddresses ─────────────────────────────────────────────────────
 
+/** Configuration for the `useStellarAddresses` hook. */
 export type UseAddressesOptions = {
   event?: string | string[];
   token?: string;
@@ -615,6 +635,7 @@ export type UseAddressesOptions = {
  * const states = useStellarAddresses(serverUrl, [addrA, addrB, addrC]);
  * // states[addrA].event, states[addrB].connected, …
  */
+/** Subscribe to multiple addresses with a single hook call. */
 export function useStellarAddresses<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   addresses: string[],
@@ -789,6 +810,7 @@ export function useStellarAddresses<T extends NormalizedEvent = NormalizedEvent>
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Keep a bounded history of Stellar events for a single address. */
 export function useStellarHistory<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,

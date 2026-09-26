@@ -20,6 +20,7 @@ export type DeadLetterEntry = {
   replayedAt?: number | null;
 };
 
+/** Filters used when querying a dead-letter store for a time-bounded set of failures. */
 export type DeadLetterFilter = {
   url?: string;
   since?: number;

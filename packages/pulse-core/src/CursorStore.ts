@@ -68,6 +68,7 @@ export abstract class CursorStore {
    */
   ping?: () => Promise<void>;
 }
+/** Minimal cursor-store contract accepted by the engine and subscriber APIs. */
 export type CursorStoreLike = {
   get(streamKey: string): Promise<string | null>;
   set(streamKey: string, cursor: string): Promise<void>;

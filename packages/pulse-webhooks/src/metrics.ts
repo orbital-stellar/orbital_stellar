@@ -1,10 +1,12 @@
 import type { WebhookAttemptStatus, WebhookMetrics, WebhookTerminalOutcome } from "./types.js";
 
+/** No-op metrics implementation used when webhook metrics are disabled. */
 export const NOOP_WEBHOOK_METRICS: WebhookMetrics = {
   recordAttempt: () => undefined,
   recordTerminal: () => undefined,
 };
 
+/** In-memory metrics collector for webhook attempts and terminal outcomes. */
 export class CountingWebhookMetrics implements WebhookMetrics {
   private readonly attemptsByUrl = new Map<
     string,

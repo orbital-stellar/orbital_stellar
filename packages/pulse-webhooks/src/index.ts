@@ -52,7 +52,9 @@ export type {
   DeadLetterFilter,
   ReplayHandler,
 } from "./DeadLetterStore.js";
+/** The dead-letter store contract used by delivery retries and replay flows. */
 export type { DeadLetterStoreInterface };
+/** The dead-letter store contract used by delivery retries and replay flows. */
 export type DeadLetterStore = DeadLetterStoreInterface;
 export { MemoryDeadLetterStore };
 /** @deprecated Use {@link MemoryDeadLetterStore} instead. */
@@ -200,6 +202,7 @@ function normalizeUrlConfig(url: WebhookConfig["url"]): {
   return { urls, urlTimeouts };
 }
 
+/** Delivery pipeline that watches a `Watcher` and forwards normalized events to webhook targets. */
 export class WebhookDelivery {
   private config: ResolvedWebhookConfig;
   private watcher: Watcher;

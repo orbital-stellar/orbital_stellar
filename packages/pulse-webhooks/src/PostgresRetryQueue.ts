@@ -1,6 +1,7 @@
 import type { RetryQueue, RetryRecord } from "./RetryQueue.js";
 import type { PgLike } from "./PostgresDeadLetterStore.js";
 
+/** Options for the Postgres-backed retry queue. */
 export type PostgresRetryQueueOptions = {
   /** Table name. Defaults to `pulse_webhook_retry_queue` (see `migrations/001_retry_queue.sql`). */
   tableName?: string;
@@ -32,6 +33,7 @@ type RetryQueueRow = {
  *
  * Requires the table created by `migrations/001_retry_queue.sql`.
  */
+/** Postgres-backed retry queue for durable webhook reattempts. */
 export class PostgresRetryQueue implements RetryQueue {
   private readonly tableSql: string;
   private readonly now: () => number;

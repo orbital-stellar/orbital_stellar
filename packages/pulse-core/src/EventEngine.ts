@@ -205,6 +205,7 @@ const refKey = {
   config: (filterKey: string) => `config:${filterKey}`,
 };
 
+/** Main event-processing engine that normalizes Horizon and Soroban activity streams. */
 export class EventEngine {
   private server: Horizon.Server;
   private registry: Map<string, Watcher> = new Map();

@@ -68,7 +68,10 @@ export type { SorobanRpcErrorCode, SorobanRpcErrorOptions } from "./errors.js";
 export { StrKey } from "@stellar/stellar-sdk";
 // Re-exported so @orbital-stellar/anchor-sdk can validate SEP-10 challenges
 // without taking its own direct dependency on @stellar/stellar-sdk.
-export { WebAuth } from "@stellar/stellar-sdk";
+import * as StellarSdk from "@stellar/stellar-sdk";
+
+/** WebAuth helper from the Stellar SDK, re-exported for SEP-10 validation. */
+export const WebAuth = StellarSdk.WebAuth;
 export { CursorStore } from "./CursorStore.js";
 export type { CursorStoreLike } from "./CursorStore.js";
 import type { CursorStoreLike } from "./CursorStore.js";
@@ -124,6 +127,7 @@ import {
 /** The Stellar network to connect to. */
 export type Network = "mainnet" | "testnet";
 
+/** Runtime status for a single network source tracked by the engine. */
 export type SourceStatus = {
   running: boolean;
   lastEventAt: string | null;
@@ -131,6 +135,7 @@ export type SourceStatus = {
   cursor?: string;
 };
 
+/** Current runtime health and transport state reported by the engine. */
 export type EngineStatus = {
   running: boolean;
   watcherCount: number;
@@ -175,7 +180,9 @@ export const NETWORK_PASSPHRASES = {
 export type PaymentEventType = "payment.received" | "payment.sent" | "payment.self";
 /** Event type for account options changes. */
 export type AccountOptionsEventType = "account.options_changed";
+/** Event type for liquidity pool lifecycle notifications. */
 export type LiquidityPoolEventType = "lp.deposited" | "lp.withdrawn";
+/** Event type for trust-line authorization changes. */
 export type TrustAuthEventType = "trustline.authorized" | "trustline.deauthorized";
 /**
  * Event type for a CAP-67 unified-stream `clawback` event. Has no
@@ -193,7 +200,9 @@ export type AssetClawbackEventType = "asset.clawback";
 export type FeeIncurredEventType = "fee.incurred";
 /** Event type for account creation. */
 export type AccountEventType = "account.created";
+/** Event type for a claimable-balance creation. */
 export type ClaimableCreatedEventType = "claimable.created";
+/** Event type for a claimable-balance claim. */
 export type ClaimableClaimedEventType = "claimable.claimed";
 /** Event types for trustline lifecycle events (added, removed, or limit updated). */
 export type TrustlineEventType = "trustline.added" | "trustline.removed" | "trustline.updated";
@@ -209,8 +218,11 @@ export type WatcherNotificationType =
   | "engine.cursor_expired"
   | "engine.backpressure";
 
+/** Event type for a Stellar offer lifecycle change. */
 export type OfferEventType = "offer.created" | "offer.updated" | "offer.deleted";
+/** Event type for an account bump-sequence operation. */
 export type BumpSequenceEventType = "account.bump_sequence";
+/** Event type for data entry create/update/delete events. */
 export type DataEventType = "data.set" | "data.cleared";
 
 /**
@@ -317,6 +329,7 @@ export type AccountOptionsEvent = {
 /** Rational (numerator/denominator) form of an offer's price, as returned by Horizon. */
 export type PriceR = { n: number; d: number };
 
+/** Normalized Stellar offer lifecycle event. */
 export type OfferEvent = {
   type: OfferEventType;
   offer_id: string;
@@ -333,6 +346,7 @@ export type OfferEvent = {
   raw?: RawHorizonManageSellOffer | RawHorizonManageBuyOffer;
 } & ClassicEventIdentity;
 
+/** Normalized account bump-sequence event. */
 export type BumpSequenceEvent = {
   type: BumpSequenceEventType;
   source: AccountAddress;
@@ -343,11 +357,13 @@ export type BumpSequenceEvent = {
   raw?: RawHorizonBumpSequence;
 } & ClassicEventIdentity;
 
+/** Claimant entry on a claimable-balance event. */
 export type ClaimableBalanceClaimant = {
   destination: AccountAddress;
   predicate: ClaimPredicate;
 };
 
+/** Normalized claimable-balance creation event. */
 export type ClaimableCreatedEvent = {
   type: ClaimableCreatedEventType;
   sponsor: AccountAddress;
@@ -361,6 +377,7 @@ export type ClaimableCreatedEvent = {
   raw?: RawHorizonCreateClaimableBalance;
 } & ClassicEventIdentity;
 
+/** Normalized claimable-balance claim event. */
 export type ClaimableClaimedEvent = {
   type: ClaimableClaimedEventType;
   claimant: AccountAddress;
@@ -371,6 +388,7 @@ export type ClaimableClaimedEvent = {
   raw?: RawHorizonClaimClaimableBalance;
 } & ClassicEventIdentity;
 
+/** Normalized account data-set or data-clear event. */
 export type DataEvent = {
   type: DataEventType;
   source: AccountAddress;
@@ -385,11 +403,13 @@ export type DataEvent = {
   raw?: RawHorizonManageData;
 } & ClassicEventIdentity;
 
+/** Reserve entry in a liquidity pool event payload. */
 export type LiquidityPoolReserve = {
   asset: string;
   amount: StellarAmount;
 };
 
+/** Normalized liquidity-pool deposit event. */
 export type LiquidityPoolDepositEvent = {
   type: "lp.deposited";
   source: AccountAddress;
@@ -402,6 +422,7 @@ export type LiquidityPoolDepositEvent = {
   raw?: RawHorizonLiquidityPoolDeposit;
 } & ClassicEventIdentity;
 
+/** Normalized liquidity-pool withdrawal event. */
 export type LiquidityPoolWithdrawEvent = {
   type: "lp.withdrawn";
   source: AccountAddress;
@@ -414,6 +435,7 @@ export type LiquidityPoolWithdrawEvent = {
   raw?: RawHorizonLiquidityPoolWithdraw;
 } & ClassicEventIdentity;
 
+/** Normalized trustline authorization event. */
 export type TrustAuthEvent = {
   type: TrustAuthEventType;
   trustor: AccountAddress;
@@ -489,6 +511,7 @@ export type AccountMergeEvent = {
 // Anchor Events (SEP-24, SEP-31)
 // ---------------------------------------------------------------------------
 
+/** Status values emitted by SEP-24 anchor flows. */
 export type Sep24Status =
   | "incomplete"
   | "pending_user_transfer_start"
@@ -506,6 +529,7 @@ export type Sep24Status =
   | "too_large"
   | "error";
 
+/** Status values emitted by SEP-31 anchor flows. */
 export type Sep31Status =
   | "pending_sender"
   | "pending_stellar"
@@ -522,6 +546,7 @@ export type Sep31Status =
  * string; the flow events carry the lifecycle in the type. Kept so the shape
  * shipped in #942 still narrows, and scheduled for removal before `v2.0.0`.
  */
+/** Legacy anchor transaction-status event retained for compatibility. */
 export type AnchorTransactionEvent = {
   type: "anchor.transaction_status_changed";
   protocol: "sep24" | "sep31";
@@ -576,6 +601,7 @@ export type AnchorPaymentEventType =
   | "anchor.payment.refunded"
   | "anchor.payment.failed";
 
+/** Event types emitted for normalized anchor-flow lifecycle transitions. */
 export type AnchorFlowEventType =
   AnchorDepositEventType | AnchorWithdrawalEventType | AnchorPaymentEventType;
 
@@ -790,6 +816,7 @@ export interface AbiRegistryClientLike {
   getSpecAt?(contractId: string, ledger: number): Promise<unknown>;
 }
 
+/** Soroban RPC configuration for a single network source. */
 export type SorobanConfig = {
   /** Soroban RPC endpoint used for live contract-event polling. */
   rpcUrl: string;
@@ -830,6 +857,7 @@ export type NetworkSourceConfig = {
   soroban?: SorobanConfig;
 };
 
+/** Configuration describing how the event engine connects to Horizon and Soroban. */
 export type CoreConfig = {
   /**
    * The Stellar network to connect to. Pass an array of `NetworkSourceConfig`
@@ -953,6 +981,7 @@ export function resolveFamilyTransport(
 }
 
 // Error class for invalid network validation
+/** Error raised when a caller passes an unsupported Stellar network name. */
 export class UnknownNetworkError extends Error {
   constructor(network: string) {
     const validNetworks = ["mainnet", "testnet"].join(", ");
@@ -961,11 +990,13 @@ export class UnknownNetworkError extends Error {
   }
 }
 
+/** Result of a health-check probe run by the engine or watcher. */
 export type HealthCheckResult = {
   ok: boolean;
   reasons: string[];
 };
 
+/** Options for subscribing a watcher to a normalized event stream. */
 export type SubscribeOptions = {
   /** Optional predicate applied before each event is emitted to this watcher.
    *  Return `false` to suppress delivery. If the predicate throws, the event
@@ -979,6 +1010,7 @@ export type SubscribeOptions = {
 // Contract events (Phase 1 - Soroban)
 // ---------------------------------------------------------------------------
 
+/** Contract event categories emitted by Soroban subscribers. */
 export type ContractEventType = "contract.invoked" | "contract.emitted";
 
 /**
@@ -1048,6 +1080,7 @@ export type ContractEmittedEvent = {
 /** Discriminated union of every normalized Soroban contract event. */
 export type ContractEvent = ContractInvokedEvent | ContractEmittedEvent;
 
+/** Notification emitted when a contract event cannot be decoded or matched to a schema. */
 export type DecodeFailedNotification = {
   type: "event.decode_failed";
   contractId: ContractAddress;
@@ -1100,6 +1133,8 @@ export type ContractSubscribeOptions = {
   name?: string;
 };
 
+import * as eventsNamespace from "./events.js";
+
 /**
  * Namespace grouping all per-event named types for precise type narrowing.
  * @see {@link events} for the full list of narrower per-event types.
@@ -1108,18 +1143,20 @@ export type ContractSubscribeOptions = {
  * import type { events } from "@orbital-stellar/pulse-core";
  * function handlePayment(e: events.PaymentEvent) { ... }
  */
-export * as events from "./events.js";
+export const events = eventsNamespace;
 
 // ---------------------------------------------------------------------------
 // Phase 1 - new RPC-shaped contract subscription API
 // ---------------------------------------------------------------------------
 
+/** Filter shape for contract subscriptions that target one or more contract IDs. */
 export type ContractFilter = {
   type?: "system" | "contract" | "diagnostic";
   contractIds?: string[];
   topics?: string[][];
 };
 
+/** Subscription configuration for a Soroban contract watcher. */
 export type ContractSubscriptionConfig = {
   filters: ContractFilter[];
 };

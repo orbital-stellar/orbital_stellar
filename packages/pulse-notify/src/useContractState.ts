@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { ContractEmittedEvent } from "@orbital-stellar/pulse-core";
 import { acquireEventConnection } from "./connectionPool.js";
 
+/** Configuration for the `useContractState` polling hook. */
 export type ContractStateOptions = {
   pollIntervalMs?: number;
   autoRefreshOn?: {
@@ -13,6 +14,7 @@ export type ContractStateOptions = {
   headers?: Record<string, string>;
 };
 
+/** Result object returned by the `useContractState` hook. */
 export type ContractStateResult<T = unknown> = {
   data: T | null;
   loading: boolean;
@@ -52,6 +54,7 @@ async function getLedgerEntry(
   return json.result;
 }
 
+/** Poll a Soroban contract ledger entry and refresh it on a fixed interval. */
 export function useContractState<T = unknown>(
   rpcUrl: string,
   contractId: string,

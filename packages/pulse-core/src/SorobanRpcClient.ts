@@ -51,6 +51,9 @@ export function rpcSupportsUnifiedEvents(info: SorobanNetworkInfo | undefined): 
   return info?.protocolVersion !== undefined && info.protocolVersion >= CAP_67_MIN_PROTOCOL_VERSION;
 }
 
+/**
+ * Network metadata reported by a Soroban RPC endpoint.
+ */
 export type SorobanNetworkInfo = {
   friendbotUrl?: string;
   passphrase: string;
@@ -138,7 +141,9 @@ export interface PollUnifiedEventsOptions {
   onCursor?: (cursor: string) => void;
 }
 
-/** Per-call options for {@link SorobanRpcClient.getEvents}. */
+/**
+ * Per-call options for {@link SorobanRpcClient.getEvents}.
+ */
 export interface GetEventsOptions {
   /**
    * XDR format for this request. Overrides the client-level default.
@@ -149,8 +154,10 @@ export interface GetEventsOptions {
   signal?: AbortSignal;
 }
 
+/** Supported XDR encodings for Soroban event payloads. */
 export type SorobanEventXdrFormat = "base64" | "json";
 
+/** Filters used to scope Soroban RPC event queries. */
 export type SorobanEventFilter = {
   type?: "contract" | "system" | "diagnostic" | "contract.invoked" | "contract.emitted";
   contractIds?: string[];
@@ -158,6 +165,7 @@ export type SorobanEventFilter = {
   topicFilters?: Array<string | null>;
 };
 
+/** Parameters accepted by Soroban `getEvents` requests. */
 export type SorobanGetEventsParams = {
   startLedger?: number;
   cursor?: string;
@@ -171,10 +179,12 @@ export type SorobanGetEventsParams = {
   xdrFormat?: SorobanEventXdrFormat;
 };
 
+/** Common RPC request options used by Soroban calls. */
 export type SorobanRpcCallOptions = {
   signal?: AbortSignal;
 };
 
+/** A single Soroban RPC event returned by `getEvents`. */
 export type SorobanRpcEvent = {
   type: string;
   ledger: number;
@@ -190,6 +200,7 @@ export type SorobanRpcEvent = {
   [key: string]: unknown;
 };
 
+/** Result payload returned by a Soroban `getEvents` query. */
 export type SorobanGetEventsResult = {
   events: SorobanRpcEvent[];
   latestLedger?: number;
@@ -197,7 +208,9 @@ export type SorobanGetEventsResult = {
   [key: string]: unknown;
 };
 
-/** Raw `simulateTransaction` result. Shapes match the JSON-RPC payload so it can be handed straight to `rpc.assembleTransaction`. */
+/**
+ * Raw `simulateTransaction` result. Shapes match the JSON-RPC payload so it can be handed straight to `rpc.assembleTransaction`.
+ */
 export type SorobanSimulateTransactionResult = {
   /** Echoed JSON-RPC request id. */
   id?: string;
@@ -214,7 +227,9 @@ export type SorobanSimulateTransactionResult = {
   latestLedger?: number;
 };
 
-/** Raw `sendTransaction` result. `PENDING` only means the network accepted it for inclusion. */
+/**
+ * Raw `sendTransaction` result. `PENDING` only means the network accepted it for inclusion.
+ */
 export type SorobanSendTransactionResult = {
   status: "PENDING" | "DUPLICATE" | "TRY_AGAIN_LATER" | "ERROR";
   hash: string;
@@ -235,6 +250,7 @@ export type SorobanGetTransactionResult = {
   latestLedger?: number;
 };
 
+/** Options for polling a Soroban transaction until completion. */
 export type PollTransactionOptions = SorobanRpcCallOptions & {
   /** How long to wait between polls. Defaults to 1000ms. */
   intervalMs?: number;
@@ -242,6 +258,7 @@ export type PollTransactionOptions = SorobanRpcCallOptions & {
   timeoutMs?: number;
 };
 
+/** Result payload returned by `getLatestLedger`. */
 export type SorobanLatestLedgerResult = {
   id?: string;
   protocolVersion?: number;
@@ -261,12 +278,14 @@ export interface LedgerCloseTimeSource {
   getLatestLedgerCloseTime(options?: SorobanRpcCallOptions): Promise<number>;
 }
 
+/** Successful JSON-RPC response payload for a Soroban call. */
 export type JsonRpcSuccess<T> = {
   jsonrpc: "2.0";
   id: string | number | null;
   result: T;
 };
 
+/** Error payload returned by a Soroban JSON-RPC call. */
 export type JsonRpcFailure = {
   jsonrpc: "2.0";
   id: string | number | null;
@@ -277,6 +296,7 @@ export type JsonRpcFailure = {
   };
 };
 
+/** Union of successful and failed JSON-RPC Soroban responses. */
 export type JsonRpcResponse<T> = JsonRpcSuccess<T> | JsonRpcFailure;
 
 /** Maps an HTTP status code to a {@link SorobanRpcError} classification. */

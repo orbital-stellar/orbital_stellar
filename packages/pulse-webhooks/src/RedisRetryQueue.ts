@@ -3,6 +3,7 @@ import type { RetryQueue, RetryRecord } from "./RetryQueue.js";
 
 type RedisValue = number | string;
 
+/** Minimal Redis client surface required by the Redis-backed retry queue. */
 export type RedisLike = {
   zadd(key: string, score: number, member: string): RedisValue | Promise<RedisValue>;
   zrangebyscore(
@@ -28,6 +29,7 @@ export type RedisLike = {
   eval(script: string, numKeys: number, ...keysAndArgs: RedisValue[]): unknown | Promise<unknown>;
 };
 
+/** Options for configuring a Redis-backed retry queue. */
 export type RedisRetryQueueOptions = {
   keyPrefix?: string;
   queueName?: string;
@@ -164,6 +166,7 @@ return 1
  * simply reclaimed when their visibility timeout expires rather than acked -
  * a delayed redelivery, never a loss.
  */
+/** Redis-backed retry queue for durable webhook scheduling. */
 export class RedisRetryQueue implements RetryQueue {
   readonly key: string;
   readonly inFlightKey: string;

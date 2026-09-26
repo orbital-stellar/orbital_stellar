@@ -70,6 +70,7 @@ export interface SorobanSubscription {
   onEvent?: (event: SorobanEvent) => Promise<void>;
 }
 
+/** Payload emitted when a Soroban subscriber is scheduling a reconnect retry. */
 export interface ReconnectingPayload {
   attempt: number;
   delayMs: number;
@@ -77,6 +78,7 @@ export interface ReconnectingPayload {
   source: "soroban";
 }
 
+/** Configuration for a Soroban event subscriber instance. */
 export interface SorobanSubscriberOptions {
   rpc: SorobanRpc;
   cursorStore: CursorStore;
@@ -154,6 +156,7 @@ export function resolveSorobanPageLimit(pageLimit?: number): number {
   return resolved;
 }
 
+/** Polls a Soroban RPC stream and forwards normalized contract events. */
 export class SorobanSubscriber extends EventEmitter {
   private readonly rpc: SorobanRpc;
   private readonly cursorStore: CursorStore;

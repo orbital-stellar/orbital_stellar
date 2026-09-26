@@ -34,6 +34,7 @@ export class MainnetSecretInRestrictedPathError extends Error {
 /** Where the secret is about to be used. */
 export type SecretPolicyContext = "demo" | "ci";
 
+/** Options passed to the secret restriction guard for demo and CI contexts. */
 export type AssertRestrictedSecretOptions = {
   /** Name of the environment variable holding the secret, for the message. */
   secretName: string;

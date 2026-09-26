@@ -37,7 +37,12 @@
 // ---------------------------------------------------------------------------
 // Re-export generated Horizon OpenAPI component types
 // ---------------------------------------------------------------------------
-export type { components, operations, paths } from "./_raw-horizon.gen.js";
+/** Generated Horizon OpenAPI `components` schema namespace. */
+export type components = import("./_raw-horizon.gen.js").components;
+/** Generated Horizon OpenAPI `operations` namespace. */
+export type operations = import("./_raw-horizon.gen.js").operations;
+/** Generated Horizon OpenAPI `paths` namespace. */
+export type paths = import("./_raw-horizon.gen.js").paths;
 
 import type { components as _HorizonComponents } from "./_raw-horizon.gen.js";
 
@@ -62,6 +67,7 @@ export interface RawHorizonJoinedTransaction {
   [key: string]: unknown;
 }
 
+/** Shared base fields on every raw Horizon operation record. */
 export interface RawHorizonBaseOperation {
   id: string;
   paging_token: string;
@@ -89,6 +95,7 @@ export interface RawHorizonBaseOperation {
   };
 }
 
+/** Raw Horizon payment operation payload. */
 export interface RawHorizonPayment extends RawHorizonBaseOperation {
   type: "payment";
   to: string;
@@ -99,6 +106,7 @@ export interface RawHorizonPayment extends RawHorizonBaseOperation {
   asset_issuer?: string;
 }
 
+/** Raw Horizon `set_options` operation payload. */
 export interface RawHorizonSetOptions extends RawHorizonBaseOperation {
   type: "set_options";
   signer_key?: string;
@@ -116,6 +124,7 @@ export interface RawHorizonSetOptions extends RawHorizonBaseOperation {
 /** Field types sourced from the generated `CreateAccount` schema - see header. */
 type _GeneratedCreateAccount = _HorizonComponents["schemas"]["CreateAccount"];
 
+/** Raw Horizon `create_account` operation payload. */
 export interface RawHorizonCreateAccount extends RawHorizonBaseOperation {
   type: "create_account";
   funder: _GeneratedCreateAccount["funder"];
@@ -123,6 +132,7 @@ export interface RawHorizonCreateAccount extends RawHorizonBaseOperation {
   starting_balance: _GeneratedCreateAccount["starting_balance"];
 }
 
+/** Raw Horizon `manage_sell_offer` operation payload. */
 export interface RawHorizonManageSellOffer extends RawHorizonBaseOperation {
   type: "manage_sell_offer";
   offer_id: string | number;
@@ -137,6 +147,7 @@ export interface RawHorizonManageSellOffer extends RawHorizonBaseOperation {
   price_r: { n: number; d: number };
 }
 
+/** Raw Horizon `manage_buy_offer` operation payload. */
 export interface RawHorizonManageBuyOffer extends RawHorizonBaseOperation {
   type: "manage_buy_offer";
   offer_id: string | number;
@@ -151,17 +162,20 @@ export interface RawHorizonManageBuyOffer extends RawHorizonBaseOperation {
   price_r: { n: number; d: number };
 }
 
+/** Raw Horizon `bump_sequence` operation payload. */
 export interface RawHorizonBumpSequence extends RawHorizonBaseOperation {
   type: "bump_sequence";
   bump_to: string;
 }
 
+/** Raw Horizon `manage_data` operation payload. */
 export interface RawHorizonManageData extends RawHorizonBaseOperation {
   type: "manage_data";
   data_name: string;
   data_value: string | null;
 }
 
+/** Raw Horizon `change_trust` operation payload. */
 export interface RawHorizonChangeTrust extends RawHorizonBaseOperation {
   type: "change_trust";
   limit: string | number;
@@ -173,12 +187,14 @@ export interface RawHorizonChangeTrust extends RawHorizonBaseOperation {
 /** Field types sourced from the generated `AccountMerge` schema - see header. */
 type _GeneratedAccountMerge = _HorizonComponents["schemas"]["AccountMerge"];
 
+/** Raw Horizon `account_merge` operation payload. */
 export interface RawHorizonAccountMerge extends RawHorizonBaseOperation {
   type: "account_merge";
   account: _GeneratedAccountMerge["account"];
   into: _GeneratedAccountMerge["into"];
 }
 
+/** Raw Horizon `create_claimable_balance` operation payload. */
 export interface RawHorizonCreateClaimableBalance extends RawHorizonBaseOperation {
   type: "create_claimable_balance";
   amount: string;
@@ -189,11 +205,13 @@ export interface RawHorizonCreateClaimableBalance extends RawHorizonBaseOperatio
   asset_issuer?: string;
 }
 
+/** Raw Horizon `claim_claimable_balance` operation payload. */
 export interface RawHorizonClaimClaimableBalance extends RawHorizonBaseOperation {
   type: "claim_claimable_balance";
   balance_id: string;
 }
 
+/** Raw Horizon `liquidity_pool_deposit` operation payload. */
 export interface RawHorizonLiquidityPoolDeposit extends RawHorizonBaseOperation {
   type: "liquidity_pool_deposit";
   liquidity_pool_id: string;
@@ -201,6 +219,7 @@ export interface RawHorizonLiquidityPoolDeposit extends RawHorizonBaseOperation 
   reserves_deposited: Array<{ asset: string; amount: string }>;
 }
 
+/** Raw Horizon `liquidity_pool_withdraw` operation payload. */
 export interface RawHorizonLiquidityPoolWithdraw extends RawHorizonBaseOperation {
   type: "liquidity_pool_withdraw";
   liquidity_pool_id: string;
@@ -208,6 +227,7 @@ export interface RawHorizonLiquidityPoolWithdraw extends RawHorizonBaseOperation
   reserves_received: Array<{ asset: string; amount: string }>;
 }
 
+/** Raw Horizon `allow_trust` operation payload. */
 export interface RawHorizonAllowTrust extends RawHorizonBaseOperation {
   type: "allow_trust";
   trustor: string;
@@ -218,6 +238,7 @@ export interface RawHorizonAllowTrust extends RawHorizonBaseOperation {
   asset_issuer?: string;
 }
 
+/** Raw Horizon `set_trust_line_flags` operation payload. */
 export interface RawHorizonSetTrustLineFlags extends RawHorizonBaseOperation {
   type: "set_trust_line_flags";
   trustor: string;

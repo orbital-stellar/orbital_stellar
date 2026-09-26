@@ -1,8 +1,10 @@
+/** Minimal S3 API surface required by the S3-backed cursor store. */
 export type S3Like = {
   getObject(params: { Bucket: string; Key: string }): Promise<{ Body: string | Uint8Array }>;
   putObject(params: { Bucket: string; Key: string; Body: string | Uint8Array }): Promise<void>;
 };
 
+/** Cursor store backed by an S3-compatible object store. */
 export class S3CursorStore {
   private readonly s3: S3Like;
   private readonly bucket: string;

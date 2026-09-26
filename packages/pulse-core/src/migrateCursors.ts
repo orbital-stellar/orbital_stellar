@@ -1,9 +1,11 @@
 import { CursorStore } from "./CursorStore.js";
 
+/** Result returned after migrating a cursor store to a target store. */
 export interface MigrateCursorsResult {
   migrated: number;
 }
 
+/** Copy all stored cursors from one durable store to another. */
 export async function migrateCursors(
   source: CursorStore,
   target: CursorStore,

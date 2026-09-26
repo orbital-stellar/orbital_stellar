@@ -1,3 +1,4 @@
+/** Raw Soroban RPC event payload before normalization. */
 export interface RawSorobanEvent {
   type: string;
   ledger: number;

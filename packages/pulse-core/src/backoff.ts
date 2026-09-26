@@ -2,6 +2,7 @@
 // Shared full-jitter exponential backoff used by both the Horizon reconnect
 // path (EventEngine) and the Soroban reconnect path (SorobanSubscriber).
 
+/** Return a full-jitter exponential backoff delay in milliseconds. */
 export function fullJitterBackoffMs(
   attempt: number,
   initialDelayMs: number,

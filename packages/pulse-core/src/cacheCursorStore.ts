@@ -43,6 +43,7 @@ class CacheCursorStore extends CursorStore {
   }
 }
 
+/** Wrap a cursor store with a small in-memory TTL cache. */
 export function cacheCursorStore(inner: CursorStore, { ttlMs }: { ttlMs: number }): CursorStore {
   return new CacheCursorStore(inner, ttlMs);
 }
