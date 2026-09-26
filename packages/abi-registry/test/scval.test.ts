@@ -251,5 +251,146 @@ describe("Soroban ScVal typed helpers", () => {
 
       expect(roundTripped.toXDR().equals(original.toXDR())).toBe(true);
     });
+
+    it("handles ScSpecTypeDef variants for primitives and numbers", () => {
+      expect(jsToScval(123, xdr.ScSpecTypeDef.scSpecTypeVal()).switch().name).toBe("scvI32");
+      expect(jsToScval(true, xdr.ScSpecTypeDef.scSpecTypeBool()).switch().name).toBe("scvBool");
+      expect(jsToScval(null, xdr.ScSpecTypeDef.scSpecTypeVoid()).switch().name).toBe("scvVoid");
+      expect(jsToScval(10, xdr.ScSpecTypeDef.scSpecTypeU32()).switch().name).toBe("scvU32");
+      expect(jsToScval(-10, xdr.ScSpecTypeDef.scSpecTypeI32()).switch().name).toBe("scvI32");
+      expect(jsToScval(100n, xdr.ScSpecTypeDef.scSpecTypeU64()).switch().name).toBe("scvU64");
+      expect(jsToScval(-100n, xdr.ScSpecTypeDef.scSpecTypeI64()).switch().name).toBe("scvI64");
+      expect(jsToScval(1000n, xdr.ScSpecTypeDef.scSpecTypeTimepoint()).switch().name).toBe(
+        "scvTimepoint",
+      );
+      expect(jsToScval(500n, xdr.ScSpecTypeDef.scSpecTypeDuration()).switch().name).toBe(
+        "scvDuration",
+      );
+      expect(jsToScval(10n, xdr.ScSpecTypeDef.scSpecTypeU128()).switch().name).toBe("scvU128");
+      expect(jsToScval(-10n, xdr.ScSpecTypeDef.scSpecTypeI128()).switch().name).toBe("scvI128");
+      expect(jsToScval(10n, xdr.ScSpecTypeDef.scSpecTypeU256()).switch().name).toBe("scvU256");
+      expect(jsToScval(-10n, xdr.ScSpecTypeDef.scSpecTypeI256()).switch().name).toBe("scvI256");
+      expect(jsToScval("hello", xdr.ScSpecTypeDef.scSpecTypeString()).switch().name).toBe(
+        "scvString",
+      );
+      expect(jsToScval("sym", xdr.ScSpecTypeDef.scSpecTypeSymbol()).switch().name).toBe(
+        "scvSymbol",
+      );
+      expect(jsToScval(Buffer.from("abc"), xdr.ScSpecTypeDef.scSpecTypeBytes()).switch().name).toBe(
+        "scvBytes",
+      );
+      const addr = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H";
+      expect(jsToScval(addr, xdr.ScSpecTypeDef.scSpecTypeAddress()).switch().name).toBe(
+        "scvAddress",
+      );
+    });
+
+    it("handles ScSpecTypeDef composite types (Option, Result, Map, Tuple, BytesN, Udt)", () => {
+      const optSpec = new xdr.ScSpecTypeOption({ typeDef: xdr.ScSpecTypeDef.scSpecTypeU32() });
+      const optTypeDef = xdr.ScSpecTypeDef.scSpecTypeOption(optSpec);
+      expect(jsToScval(null, optTypeDef).switch().name).toBe("scvVoid");
+      expect(jsToScval(42, optTypeDef).switch().name).toBe("scvU32");
+
+      const resSpec = new xdr.ScSpecTypeResult({
+        ok: xdr.ScSpecTypeDef.scSpecTypeString(),
+        error: xdr.ScSpecTypeDef.scSpecTypeError(),
+      });
+      const resTypeDef = xdr.ScSpecTypeDef.scSpecTypeResult(resSpec);
+      expect(jsToScval("success", resTypeDef).switch().name).toBe("scvString");
+      expect(jsToScval(new Error("fail"), resTypeDef).switch().name).toBe("scvError");
+
+      const mapSpec = new xdr.ScSpecTypeMap({
+        key: xdr.ScSpecTypeDef.scSpecTypeString(),
+        value: xdr.ScSpecTypeDef.scSpecTypeU32(),
+      });
+      const mapTypeDef = xdr.ScSpecTypeDef.scSpecTypeMap(mapSpec);
+      const resMap = jsToScval({ k1: 99 }, mapTypeDef);
+      expect(resMap.switch().name).toBe("scvMap");
+
+      const tupleSpec = new xdr.ScSpecTypeTuple({
+        values: [xdr.ScSpecTypeDef.scSpecTypeU32(), xdr.ScSpecTypeDef.scSpecTypeString()],
+      });
+      const tupleTypeDef = xdr.ScSpecTypeDef.scSpecTypeTuple(tupleSpec);
+      const resTuple = jsToScval([10, "test"], tupleTypeDef);
+      expect(resTuple.switch().name).toBe("scvVec");
+
+      const bytesNSpec = new xdr.ScSpecTypeBytesN({ n: 32 });
+      const bytesNTypeDef = xdr.ScSpecTypeDef.scSpecTypeBytesN(bytesNSpec);
+      expect(jsToScval(Buffer.alloc(32), bytesNTypeDef).switch().name).toBe("scvBytes");
+
+      const udtSpec = new xdr.ScSpecTypeUdt({ name: "MyType" });
+      const udtTypeDef = xdr.ScSpecTypeDef.scSpecTypeUdt(udtSpec);
+      expect(jsToScval("val", udtTypeDef).switch().name).toBe("scvString");
+    });
+  });
+
+  describe("Branch & Coverage Edge Cases", () => {
+    it("handles bytes input formats (Buffer, Uint8Array, hex, utf-8, array)", () => {
+      expect(jsToScval(new Uint8Array([1, 2, 3]), "bytes").switch().name).toBe("scvBytes");
+      expect(jsToScval("0a0b0c", "bytes").switch().name).toBe("scvBytes");
+      expect(jsToScval("plain_string", "bytes").switch().name).toBe("scvBytes");
+      expect(jsToScval([1, 2, 3], "bytes").switch().name).toBe("scvBytes");
+      expect(() => jsToScval(12345, "bytes")).toThrow("Unsupported bytes value");
+    });
+
+    it("handles Address input variants and invalid values", () => {
+      const str = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H";
+      const addrObj = Address.fromString(str);
+      expect(jsToScval(addrObj.toScAddress(), "address").switch().name).toBe("scvAddress");
+      expect(jsToScval(addrObj, "address").switch().name).toBe("scvAddress");
+      expect(jsToScval(str, "address").switch().name).toBe("scvAddress");
+      expect(() => jsToScval(123, "address")).toThrow("Unsupported address value");
+    });
+
+    it("handles Map with various collection representations", () => {
+      const fromMap = new Map([["keyA", "valA"]]);
+      expect(jsToScval(fromMap, "map").switch().name).toBe("scvMap");
+
+      const fromPairArray = [["keyB", "valB"]];
+      expect(jsToScval(fromPairArray, "map").switch().name).toBe("scvMap");
+
+      const fromKeyValueObjects = [{ key: "keyC", val: "valC" }];
+      expect(jsToScval(fromKeyValueObjects, "map").switch().name).toBe("scvMap");
+
+      expect(() => jsToScval([1, 2, 3], "map")).toThrow("Invalid array format for map type");
+      expect(() => jsToScval("invalid", "map")).toThrow("Value must be a Map, Object, or Array");
+    });
+
+    it("handles negative values in unsigned 128 and 256 bits", () => {
+      expect(() => jsToScval(-1n, "u128")).toThrow("Cannot represent negative value as u128");
+      expect(() => jsToScval(-1n, "u256")).toThrow("Cannot represent negative value as u256");
+    });
+
+    it("handles tuple type validation and option handling", () => {
+      expect(() => jsToScval("not_array", "tuple")).toThrow(
+        "Value must be an array for tuple type",
+      );
+      expect(() => jsToScval("not_array", "vec")).toThrow("Value must be an array for vec type");
+
+      expect(jsToScval(undefined, "option").switch().name).toBe("scvVoid");
+      expect(jsToScval(null, "option").switch().name).toBe("scvVoid");
+
+      expect(jsToScval({ type: "error" }, "result").switch().name).toBe("scvError");
+    });
+
+    it("handles smart inference fallback for numbers, contracts, and primitives", () => {
+      expect(jsToScval(null).switch().name).toBe("scvVoid");
+      expect(jsToScval(undefined).switch().name).toBe("scvVoid");
+      expect(jsToScval(3.14).switch().name).toBe("scvI32");
+      expect(jsToScval(new Uint8Array([5, 6])).switch().name).toBe("scvBytes");
+      expect(jsToScval([1, 2, 3]).switch().name).toBe("scvVec");
+      expect(jsToScval(new Map([["a", 1]])).switch().name).toBe("scvMap");
+      expect(jsToScval({ a: 1 }).switch().name).toBe("scvMap");
+
+      const contractAddr = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
+      expect(jsToScval(contractAddr).switch().name).toBe("scvAddress");
+
+      const existingScVal = xdr.ScVal.scvVoid();
+      expect(jsToScval(existingScVal)).toBe(existingScVal);
+    });
+
+    it("throws on unsupported error input", () => {
+      expect(() => jsToScval("invalid_error", "error")).toThrow("Unsupported error value");
+    });
   });
 });
