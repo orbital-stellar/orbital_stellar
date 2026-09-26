@@ -157,7 +157,9 @@ describe("eventAddressNarrow", () => {
         trustor: "GTRUSTOR",
         issuer: "GISSUER",
       } as unknown as NormalizedEvent;
-      expect(describeEvent(deauth)).toBe("Trust trustline.deauthorized between GTRUSTOR and GISSUER");
+      expect(describeEvent(deauth)).toBe(
+        "Trust trustline.deauthorized between GTRUSTOR and GISSUER",
+      );
     });
 
     it("describes asset.clawback events", () => {
@@ -196,7 +198,9 @@ describe("eventAddressNarrow", () => {
         transaction_id: "tx_abc123",
         status: "pending_anchor",
       } as unknown as NormalizedEvent;
-      expect(describeEvent(event)).toBe("Anchor transaction tx_abc123 status changed to pending_anchor");
+      expect(describeEvent(event)).toBe(
+        "Anchor transaction tx_abc123 status changed to pending_anchor",
+      );
     });
 
     it("describes anchor deposit events across all stages", () => {
@@ -223,7 +227,9 @@ describe("eventAddressNarrow", () => {
           stage,
           protocolStatus: "pending_user_transfer_start",
         } as unknown as NormalizedEvent;
-        expect(describeEvent(event)).toBe(`Anchor withdrawal tx_with_${stage} ${stage} (pending_user_transfer_start)`);
+        expect(describeEvent(event)).toBe(
+          `Anchor withdrawal tx_with_${stage} ${stage} (pending_user_transfer_start)`,
+        );
       }
     });
 
