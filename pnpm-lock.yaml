@@ -195,11 +195,11 @@ importers:
   examples/express-starter:
     dependencies:
       '@orbital-stellar/pulse-core':
-        specifier: workspace:*
-        version: link:../../packages/pulse-core
+        specifier: ^0.2.0
+        version: 0.2.0
       '@orbital-stellar/pulse-webhooks':
-        specifier: workspace:*
-        version: link:../../packages/pulse-webhooks
+        specifier: ^0.2.0
+        version: 0.2.0
       express:
         specifier: ^5.2.0
         version: 5.2.1
@@ -214,8 +214,8 @@ importers:
         version: 4.6.2
     devDependencies:
       '@orbital-stellar/abi-registry':
-        specifier: workspace:*
-        version: link:../../packages/abi-registry
+        specifier: ^0.2.0
+        version: 0.2.0
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -1070,14 +1070,29 @@ packages:
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
 
+  '@orbital-stellar/abi-registry@0.2.0':
+    resolution: {integrity: sha512-Tq5LyxpBKG5dy+vudrzL4nQl2O/oWuHESO8NQeHROEjZd7mjGd/jONRC+/X3fia2/MBfrYKSL4/jmSIZOsYiXg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@orbital-stellar/pulse-core@0.1.0':
     resolution: {integrity: sha512-s0kq8o/ZkjGoSB6ZlaW8+Dunz5wWB3PVFNIUYkTCfXntVm14wI3+0EKkMjufxmNvBYrgHmR/VlW7yn6wYH+Lyw==}
+    hasBin: true
+
+  '@orbital-stellar/pulse-core@0.2.0':
+    resolution: {integrity: sha512-E3DUzEv/jeU8akCJnoQEKWonlzkp0up+wJ+/nklUkenllMpz1dzouhlOQegmq8W8251RTPuqsSTa4aHBjgZBvw==}
+    engines: {node: '>=20'}
     hasBin: true
 
   '@orbital-stellar/pulse-notify@0.1.0':
     resolution: {integrity: sha512-j2XWlf8hPQeydhU1R+1aw2U5Aw6qvQ9qqhwKlPzs/rPBsxkUwbPrLibKbc4ozQELwv7RAJjM0eEWUJA5qkCZnw==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
+
+  '@orbital-stellar/pulse-webhooks@0.2.0':
+    resolution: {integrity: sha512-I8Cphm98Lj7raOlLQgUjm9phFFO/aZsvXOPn6LWhY/OgFFM/4TLAUo0wOLU3hVxQ9EbTWqxa/7NitPbywDwYRQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@oxc-project/types@0.149.0':
     resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
@@ -4252,6 +4267,15 @@ snapshots:
 
   '@opentelemetry/api@1.9.1': {}
 
+  '@orbital-stellar/abi-registry@0.2.0':
+    dependencies:
+      '@stellar/js-xdr': 4.0.0
+      '@stellar/stellar-sdk': 16.2.0
+      yargs: 18.1.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
   '@orbital-stellar/pulse-core@0.1.0':
     dependencies:
       '@stellar/stellar-sdk': 15.1.0
@@ -4260,10 +4284,28 @@ snapshots:
       - debug
       - supports-color
 
+  '@orbital-stellar/pulse-core@0.2.0':
+    dependencies:
+      '@orbital-stellar/abi-registry': 0.2.0
+      '@stellar/stellar-sdk': 16.2.0
+      yargs: 18.1.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
   '@orbital-stellar/pulse-notify@0.1.0(react@19.2.8)':
     dependencies:
       '@orbital-stellar/pulse-core': 0.1.0
       react: 19.2.8
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
+  '@orbital-stellar/pulse-webhooks@0.2.0':
+    dependencies:
+      '@orbital-stellar/pulse-core': 0.2.0
+      prom-client: 15.1.3
+      undici: 7.29.0
     transitivePeerDependencies:
       - debug
       - supports-color
