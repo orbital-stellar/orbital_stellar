@@ -284,10 +284,7 @@ describe("claimPredicate", () => {
 
     it("normalizes and predicate with nested elements", () => {
       const result = normalizeClaimPredicate({
-        and: [
-          { unconditional: true },
-          { abs_before: "2026-12-31T23:59:59Z" },
-        ],
+        and: [{ unconditional: true }, { abs_before: "2026-12-31T23:59:59Z" }],
       });
       expect(result).toEqual({
         type: "and",
@@ -300,17 +297,11 @@ describe("claimPredicate", () => {
 
     it("normalizes or predicate with nested elements", () => {
       const result = normalizeClaimPredicate({
-        or: [
-          { rel_before: "7200" },
-          { unconditional: true },
-        ],
+        or: [{ rel_before: "7200" }, { unconditional: true }],
       });
       expect(result).toEqual({
         type: "or",
-        predicates: [
-          { type: "rel_before", seconds: "7200" },
-          { type: "unconditional" },
-        ],
+        predicates: [{ type: "rel_before", seconds: "7200" }, { type: "unconditional" }],
       });
     });
 
