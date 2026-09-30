@@ -171,9 +171,9 @@ export type SorobanEventFilter = {
   type?: "contract" | "system" | "diagnostic" | "contract.invoked" | "contract.emitted";
   /** Contract IDs to filter events from. */
   contractIds?: string[];
-  /** Topic arrays to match (first segment is topic name). */
+  /** Topic match patterns: each inner array is one pattern, segment by segment (`null` = wildcard). */
   topics?: Array<Array<string | null>>;
-  /** Individual topic segment filters. */
+  /** Single topic pattern, segment by segment (`null` = wildcard). */
   topicFilters?: Array<string | null>;
 };
 
@@ -185,7 +185,7 @@ export type SorobanGetEventsParams = {
   startLedger?: number;
   /** Cursor to resume from a previous page. */
   cursor?: string;
-  /** Alias for `cursor`. */
+  /** Cursor to start from; what the positional `getEvents(startCursor, ...)` form sets. */
   startCursor?: string;
   /** Event filters (up to 5). */
   filters?: SorobanEventFilter[] | ContractSubscriptionFilter[];
@@ -209,7 +209,7 @@ export type SorobanRpcCallOptions = {
 };
 
 /**
- * Normalized Soroban event shape returned by `getEvents`.
+ * Raw Soroban event record as returned by the RPC `getEvents` method.
  */
 export type SorobanRpcEvent = {
   /** Event type (e.g., "contract", "system"). */
@@ -228,7 +228,7 @@ export type SorobanRpcEvent = {
   topic?: unknown[];
   /** Full topic array (name + topic segments). */
   topics?: unknown[];
-  /** Decoded event value (when xdrFormat="json"). */
+  /** Event value: base64 XDR by default, decoded JSON when `xdrFormat` is `"json"`. */
   value?: unknown;
   /** Transaction hash that produced this event. */
   txHash?: string;
@@ -304,13 +304,13 @@ export type PollTransactionOptions = SorobanRpcCallOptions & {
  * Result of the `getLatestLedger` RPC call.
  */
 export type SorobanLatestLedgerResult = {
-  /** Echoed JSON-RPC request id. */
+  /** Hash identifying the latest ledger. */
   id?: string;
   /** Protocol version of the network. */
   protocolVersion?: number;
   /** The latest ledger sequence number. */
   sequence: number;
-  /** Unix timestamp of the ledger close time. */
+  /** Ledger close time as a Unix timestamp. */
   ledgerCloseTime?: number;
 };
 
@@ -328,7 +328,7 @@ export interface LedgerCloseTimeSource {
 
 /**
  * Successful JSON-RPC 2.0 response.
- * @template T - The shape of the `result` field.
+ * @typeParam T - The shape of the `result` field.
  */
 export type JsonRpcSuccess<T> = {
   jsonrpc: "2.0";
@@ -351,7 +351,7 @@ export type JsonRpcFailure = {
 
 /**
  * JSON-RPC 2.0 response (success or failure).
- * @template T - The shape of the `result` field on success.
+ * @typeParam T - The shape of the `result` field on success.
  */
 export type JsonRpcResponse<T> = JsonRpcSuccess<T> | JsonRpcFailure;
 
