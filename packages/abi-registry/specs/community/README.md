@@ -17,8 +17,11 @@ specs/community/
 
 - `<contractId>.json` is the canonical [`ContractSpec`](../src/spec.ts)
   exactly as it will be published: `version`, `name`, `contractId`,
-  `functions`, `events`, `types`. The registry pointer is attached at
-  publish time, so committed files carry no `pointer` field.
+  `functions`, `events`, `types`, `pointer`. The on-chain hash covers the
+  whole canonical spec, pointer included, and resolvers re-hash whatever the
+  pointer serves, so the committed file must carry its own pointer
+  (`https://raw.githubusercontent.com/orbital-stellar/orbital_stellar/main/packages/abi-registry/specs/community/<contractId>.json`).
+  Contributors may omit it; `seed-community.ts stamp` adds it before publishing.
 - `<contractId>.verdict.json` is the `abi-registry verify --json` output for
   that spec: `{ "contractId": "<contractId>", "status": "match" | ... }`.
 
@@ -35,7 +38,11 @@ applies to the bundled specs.
 ## Publishing
 
 ```bash
-# From packages/abi-registry. Dry run first: simulates against the live
+# From packages/abi-registry. Stamp pointers into any spec lacking one,
+# then commit and push the stamped files to main.
+npx tsx scripts/seed-community.ts stamp
+
+# Dry run first: simulates against the live
 # testnet registry without signing or sending.
 SOROBAN_CONTRACT_ID=... SOROBAN_INVOKER_SECRET=... \
   npx tsx scripts/seed-community.ts publish --dry-run

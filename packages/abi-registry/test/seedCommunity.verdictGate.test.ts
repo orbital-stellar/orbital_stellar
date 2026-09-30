@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverCommunitySpecs, isPublishableVerdict } from "../scripts/seed-community.js";
+import {
+  communityPointer,
+  discoverCommunitySpecs,
+  isPublishableVerdict,
+  stampCommunityPointers,
+} from "../scripts/seed-community.js";
+import { canonicalizeSpec } from "../src/spec.js";
 import type { ContractSpec } from "../src/spec.js";
 
 // Real mainnet contract IDs (valid StrKey checksums) borrowed from the
@@ -174,5 +180,43 @@ describe("discoverCommunitySpecs verdict gate (issue #1184)", () => {
 
   it("reads a missing directory as no specs", () => {
     expect(discoverCommunitySpecs(join(dir, "does-not-exist"))).toEqual([]);
+  });
+});
+
+describe("community spec pointers", () => {
+  it("keeps a committed pointer that matches the expected one", () => {
+    writeSpec(dir, CONTRACT_A, { pointer: communityPointer(CONTRACT_A) });
+    writeVerdict(dir, CONTRACT_A, { contractId: CONTRACT_A, status: "match" });
+
+    const entries = discoverCommunitySpecs(dir);
+
+    expect(entries[0]?.publishable).toBe(true);
+    expect(entries[0]?.spec.pointer).toBe(communityPointer(CONTRACT_A));
+  });
+
+  it("refuses a committed pointer that points elsewhere", () => {
+    writeSpec(dir, CONTRACT_A, { pointer: "https://example.invalid/other.json" });
+    writeVerdict(dir, CONTRACT_A, { contractId: CONTRACT_A, status: "match" });
+
+    const entries = discoverCommunitySpecs(dir);
+
+    expect(entries[0]?.publishable).toBe(false);
+    expect(entries[0]?.refusalReason).toMatch(/not the expected/);
+  });
+
+  it("stamp writes the pointer so the served file hashes like the published spec", () => {
+    writeSpec(dir, CONTRACT_A);
+    writeSpec(dir, CONTRACT_B, { pointer: communityPointer(CONTRACT_B) });
+    writeVerdict(dir, CONTRACT_A, { contractId: CONTRACT_A, status: "match" });
+
+    expect(stampCommunityPointers(dir)).toEqual([`${CONTRACT_A}.json`]);
+
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, `${CONTRACT_A}.json`), "utf-8"),
+    ) as ContractSpec;
+    const [entry] = discoverCommunitySpecs(dir);
+    expect(onDisk.pointer).toBe(communityPointer(CONTRACT_A));
+    expect(canonicalizeSpec(onDisk)).toBe(canonicalizeSpec(entry!.spec));
+    expect(stampCommunityPointers(dir)).toEqual([]);
   });
 });

@@ -17,7 +17,13 @@
  * published. Re-running `publish` is safe for the same reason as there: a
  * version already on chain reports `AlreadyPublished` and counts as done.
  *
+ * The published hash covers the pointer, so the committed file must carry
+ * it. `stamp` writes it into any community spec lacking one; commit and push
+ * the result to `main` before publishing.
+ *
  * Usage:
+ *   npx tsx scripts/seed-community.ts stamp
+ *
  *   SOROBAN_CONTRACT_ID=... SOROBAN_INVOKER_SECRET=... \
  *     npx tsx scripts/seed-community.ts publish --dry-run
  *
@@ -37,7 +43,7 @@
  *   SKIP_POINTER_CHECK=1         - publish even if a pointer does not resolve
  */
 
-import { readdirSync, existsSync, readFileSync, mkdirSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +69,41 @@ function pointerBaseUrl(): string {
     process.env.COMMUNITY_POINTER_BASE_URL ??
     "https://raw.githubusercontent.com/orbital-stellar/orbital_stellar/main/packages/abi-registry/specs/community"
   );
+}
+
+/** The registry pointer for a community spec: its committed file at `main`. */
+export function communityPointer(contractId: string): string {
+  return `${pointerBaseUrl()}/${contractId}.json`;
+}
+
+/**
+ * Writes the registry pointer into every community spec file that lacks it.
+ *
+ * The published hash covers the pointer, so the file served at the pointer
+ * must contain it too - otherwise no resolver can reproduce the on-chain
+ * hash. Run this, commit and push the stamped files to `main`, then publish.
+ * Returns the filenames that were changed.
+ */
+export function stampCommunityPointers(dir: string = COMMUNITY_DIR): string[] {
+  let files: string[];
+  try {
+    files = readdirSync(dir).sort();
+  } catch {
+    return [];
+  }
+  const stamped: string[] = [];
+  for (const file of files) {
+    if (!file.endsWith(".json") || file.endsWith(".verdict.json")) continue;
+    const parsed = readJson(resolve(dir, file));
+    if (!parsed.ok || typeof parsed.value !== "object" || parsed.value === null) continue;
+    const spec = parsed.value as ContractSpec;
+    if (!spec.contractId || spec.contractId !== basename(file, ".json")) continue;
+    if (spec.pointer !== undefined) continue;
+    const withPointer = { ...spec, pointer: communityPointer(spec.contractId) };
+    writeFileSync(resolve(dir, file), `${JSON.stringify(withPointer, null, 2)}\n`, "utf-8");
+    stamped.push(file);
+  }
+  return stamped;
 }
 
 /** A `<contractId>.verdict.json` file: `abi-registry verify --json` output. */
@@ -161,10 +202,17 @@ export function discoverCommunitySpecs(dir: string = COMMUNITY_DIR): CommunityEn
       refuse(`${file}: filename does not match spec contract_id "${spec.contractId}"`);
       continue;
     }
-    const specWithPointer: ContractSpec = {
-      ...spec,
-      pointer: `${pointerBaseUrl()}/${spec.contractId}.json`,
-    };
+    // The on-chain hash covers the whole canonical spec, pointer included, and
+    // resolvers re-hash whatever the pointer serves. So the committed file
+    // must carry the pointer itself (see the `stamp` phase); a file without
+    // one gets it attached here so validation can run, and the pre-publish
+    // pointer check then refuses it until the stamped file is on `main`.
+    const expectedPointer = communityPointer(spec.contractId);
+    if (spec.pointer !== undefined && spec.pointer !== expectedPointer) {
+      refuse(`${file}: pointer "${String(spec.pointer)}" is not the expected "${expectedPointer}"`);
+      continue;
+    }
+    const specWithPointer: ContractSpec = { ...spec, pointer: expectedPointer };
     const validation = validateSpec(specWithPointer);
     if (!validation.valid) {
       refuse(
@@ -334,12 +382,23 @@ async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
 
   switch (phase) {
+    case "stamp": {
+      const stamped = stampCommunityPointers();
+      for (const file of stamped) console.log(`==> Stamped pointer into ${file}`);
+      console.log(
+        stamped.length === 0
+          ? "Every community spec already carries its pointer."
+          : "\nCommit and push the stamped files to main, then run publish --dry-run.",
+      );
+      break;
+    }
     case "publish":
       await publish(dryRun);
       break;
     default:
       console.error(
-        "usage: seed-community.ts publish [--dry-run]\n\n" +
+        "usage: seed-community.ts stamp | publish [--dry-run]\n\n" +
+          "  stamp     write the registry pointer into community spec files lacking it\n" +
           "  publish   publish match-verdict community specs on chain; run with --dry-run first",
       );
       process.exit(2);
