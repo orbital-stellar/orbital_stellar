@@ -353,7 +353,9 @@ the release process, not a scheduling preference.
 - **`W4` — backstop (operated service, lands last).** **Dropped** ([#1137](https://github.com/orbital-stellar/orbital_stellar/issues/1137)):
   the worker layer is not a trading product — copy-trading would have required
   moving subscriber funds, i.e. custody the layer must never hold — so the
-  vault / copy-trade / latency-tier scope was cut instead of built.
+  vault / copy-trade / latency-tier scope was cut instead of built. The
+  time-insensitive backstop watcher (`BackstopWatcher` in `worker-core`) stays;
+  only the latency-sensitive tier and the vault it required were removed.
   *Gate (had it shipped):* Orbital-operated backstop in staging with a met SLO (time-to-contain
   on a worker fault) and a documented incident runbook. Ships only after
   `W0`–`W3` are green, per the hard build-order constraint above.
