@@ -145,3 +145,13 @@ node validate.js
 - `1` - one or more specs fail; errors are printed to stderr with the file path and the failing field.
 
 CI runs `pnpm --filter @orbital-stellar/abi-registry validate` on every pull request that touches `packages/abi-registry/`.
+
+---
+
+## Community verified specs
+
+`specs/community/` holds verified canonical specs for third-party protocol contracts. Each contract has `<contractId>.json` (the `ContractSpec` from `discoverContractSpec()`, not hand-written, with `version`/`name`/`description` set) and `<contractId>.verdict.json` (output of `abi-registry verify <contractId> --schema <file> --network mainnet --rpc-url <mainnet RPC> --json`, status `match`).
+
+| Contract ID | Protocol / role | Source |
+|---|---|---|
+| `CCLZQDL5LY2DBPNNFBRKPSROGFGTT7Y7AI2SM6QUI3SUTTKA672X4PDF` | Aquarius stableswap pool (USDC/USDx) | Aquarius backend API `https://amm-api.aqua.network/api/external/v2/pools/` (pool type `stable`), [stellar.expert](https://stellar.expert/explorer/public/contract/CCLZQDL5LY2DBPNNFBRKPSROGFGTT7Y7AI2SM6QUI3SUTTKA672X4PDF) |

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- `PrimitiveType` gained `"val"` - the generic Soroban value slot (`scvVal`); real and common, since DeFindex strategies take `Vec<Val>` init args (verified against the live mainnet Blend strategy WASM). `schema/spec.schema.json`, `schemas/attestation.schema.json` and `schema/taxonomy.schema.json` carry the same addition, and `discoverContractSpec()` no longer throws `UnsupportedSpecTypeError` on it.
+- `specs/community/` - verified canonical spec and `match` verdict for an Aquarius stableswap pool (`CCLZQDL5...PDF`).
+
 ## [0.2.0] - 2026-09-23
 
 ### Added
