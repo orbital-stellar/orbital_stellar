@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1323-25-16-worker-core-raise-coverage-of-schedule-ts",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1323-25-16-worker-core-raise-coverage-of-schedule-ts": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1323-25-16-worker-core-raise-coverage-of-schedule-ts",
+    "origin"
+  ]
+}
