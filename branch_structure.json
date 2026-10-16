@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-1311-25-4-pulse-webhooks-tests-for-private-ip-ts",
+    "fix/issue-1317-25-10-web-tests-for-lib-links-ts",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-1311-25-4-pulse-webhooks-tests-for-private-ip-ts": "main",
+    "fix/issue-1317-25-10-web-tests-for-lib-links-ts": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-1311-25-4-pulse-webhooks-tests-for-private-ip-ts",
+    "fix/issue-1317-25-10-web-tests-for-lib-links-ts",
+    "origin"
+  ]
+}
