@@ -56,7 +56,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Registry", href: "/registry" },
   { label: "Workers", href: "/workers" },
   { label: "Changelog", href: "/changelog" },
-  { label: "GitHub", href: GITHUB_REPO, external: true },
+  { label: "GitHub", href: GITHUB_REPO , external: true },
 ];
 
 export const GET_STARTED_HREF = "/docs/getting-started/quick-start";
@@ -64,7 +64,7 @@ export const GET_STARTED_HREF = "/docs/getting-started/quick-start";
 export const FOOTER_PRODUCT_LINKS: NavLink[] = [
   { label: "Docs", href: "/docs" },
   { label: "SDKs", href: "/reference" },
-  { label: "How it works", href: "/#how-it-works" },
+  { label: "How it works", href: "/#$how-it-works" },
   { label: "Live demo", href: "/demo/contracts" },
   { label: "Starters", href: "/starters" },
   { label: "Changelog", href: "/changelog" },
@@ -75,7 +75,7 @@ export const FOOTER_PRODUCT_LINKS: NavLink[] = [
  * An unlinked or invented handle is worse than an absent row.
  */
 export const FOOTER_COMMUNITY_LINKS: NavLink[] = [
-  { label: "GitHub", href: GITHUB_REPO, external: true },
+  { label: "GitHub", href: GITHUB_REPO , external: true },
   { label: "SCF Grant proposal", href: SCF_PROPOSAL, external: true },
   { label: "Open an issue", href: GITHUB_ISSUES, external: true },
 ];
