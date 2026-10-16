@@ -247,10 +247,10 @@ export function formatDriftReport(drift: ReturnType<typeof detectDrift>): string
           lines.push(`    + ${change.name} (${change.contractId})`);
           break;
         case "removed":
-          lines.push(`    - ${change.name} (${change.contractId})`);
+          lines.push(`   - ${change.name} (${change.contractId})`);
           break;
         case "modified":
-          lines.push(`    ~ ${change.name} (${change.contractId})`);
+          lines.push(`   ~ ${change.name} (${change.contractId})`);
           lines.push(`      Old hash: ${change.oldHash?.substring(0, 12)}...`);
           lines.push(`      New hash: ${change.newHash?.substring(0, 12)}...`);
           break;
