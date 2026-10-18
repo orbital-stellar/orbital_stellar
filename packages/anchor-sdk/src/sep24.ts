@@ -62,7 +62,7 @@ export const Sep24InteractiveResponseSchema = z.object({
 /** Parsed Sep24InteractiveResponseSchema response - the webview URL and transaction id. */
 export type Sep24InteractiveResponse = z.infer<typeof Sep24InteractiveResponseSchema>;
 
-const SEP24_STATUES = [
+const SEP24_STATUSES = [
   "incomplete",
   "pending_user_transfer_start",
   "pending_user_transfer_complete",
