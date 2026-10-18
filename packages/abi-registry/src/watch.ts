@@ -108,7 +108,7 @@ export async function watchCodegen(
   let shouldRun = true;
   let needsRegeneration = false;
 
-  const onSignt = () => {
+  const onSigint = () => {
     shouldRun = false;
     if (pendingTimeout) {
       clearTimeout(pendingTimeout);
@@ -118,8 +118,8 @@ export async function watchCodegen(
     process.exit(0);
   };
 
-  process.on("SIGINT", onSignt);
-  process.on("SIGTERM", onSignt);
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigint);
 
   console.log(
     `[orbital codegen --watch] Watching ${config.contracts.length} contract(s) (poll every ${pollIntervalMs}ms)...`,
@@ -194,6 +194,6 @@ export async function watchCodegen(
     }
   }
 
-  process.off("SIGINT", onSignt);
-  process.off("SIGTERM", onSignt);
+  process.off("SIGINT", onSigint);
+  process.off("SIGTERM", onSigint);
 }

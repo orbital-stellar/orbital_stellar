@@ -199,7 +199,7 @@ export function validateConfig(config: unknown): asserts config is OrbitalConfig
       throw new ConfigValidationError("network", "Must be a string");
     }
 
-    if (!["mainnet", "testnet", "futurenet"].includes(cfg.network as string)) {
+    if (!["mainnet", "testnet", "futurenet"].includes(cfg.network)) {
       throw new ConfigValidationError("network", "Must be one of: mainnet, testnet, futurenet");
     }
   }
@@ -299,7 +299,7 @@ export function loadCodegenConfig(cwd: string): {
       config = loadedConfig;
     } catch (error) {
       errors.push(
-        `Failed to load orbital config from ${configPath}: ${-
+        `Failed to load orbital config from ${configPath}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -359,7 +359,7 @@ function loadLegacyConfigFile(configPath: string): OrbitalCodegenConfig {
     )(defineConfig) as OrbitalCodegenConfig;
   } catch (error) {
     throw new Error(
-      `Synchronous compatibility loader could not evaluate this config. Prefer loadConfig() for full module support. ${-
+      `Synchronous compatibility loader could not evaluate this config. Prefer loadConfig() for full module support. ${
         error instanceof Error ? error.message : String(error)
       }`,
     );

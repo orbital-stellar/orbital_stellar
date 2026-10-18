@@ -109,7 +109,7 @@ export async function generateBatchTypes(
     } catch (error) {
       const contractName = contractConfig.name || contractConfig.contractId;
       throw new BatchGenerationError(
-        `Failed to resolve contract '${contractName}' (contracts[${i}]): ${-
+        `Failed to resolve contract '${contractName}' (contracts[${i}]): ${
           error instanceof Error ? error.message : String(error)
         }`,
         contractConfig.contractId,
@@ -227,7 +227,7 @@ export async function checkForDrift(
         const contractName = contractConfig.name || contractConfig.contractId;
         return {
           hasChanges: true,
-          report: `✗ Failed to resolve contract '${contractName}' (contracts[${i}]): ${-
+          report: `✗ Failed to resolve contract '${contractName}' (contracts[${i}]): ${
             error instanceof Error ? error.message : String(error)
           }`,
         };
@@ -373,23 +373,54 @@ async function resolveContractSpec(
     });
     return { spec, source: "wasm" };
   } catch (error) {
-    throw new Error(
-      `Failed to resolve contract '${contractConfig.contractId}' from registry, well-known specs, or WASM discovery: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    // Provide detailed error messages for common failure cases
+    const baseMessage = `Could not resolve contract spec for '${contractConfig.contractId}'`;
+
+    if (error instanceof Error) {
+      if (error.message.includes("contract not found") || error.message.includes("404")) {
+        throw new Error(
+          `${baseMessage}: Contract not found on ${network} network. Verify the contract ID and network.`,
+        );
+      }
+
+      if (error.message.includes("network") || error.message.includes("connection")) {
+        throw new Error(
+          `${baseMessage}: Network error when connecting to ${rpcUrl}. Check your connection and RPC endpoint.`,
+        );
+      }
+
+      if (error.message.includes("NoEmbeddedSpecError")) {
+        throw new Error(
+          `${baseMessage}: Contract has no embedded spec (likely a Stellar Asset Contract). Consider publishing the spec to the registry.`,
+        );
+      }
+
+      throw new Error(`${baseMessage}: ${error.message}`);
+    }
+
+    throw new Error(`${baseMessage}: ${String(error)}`);
   }
 }
 
+/**
+ * Gets the default RPC URL for a network
+ */
 function getDefaultRpcUrl(network: "mainnet" | "testnet" | "futurenet"): string {
   switch (network) {
     case "mainnet":
-      return "https://mainnet.soroban.rpc.stellar.org";
+      return "https://soroban-mainnet.stellar.org";
     case "testnet":
       return "https://soroban-testnet.stellar.org";
     case "futurenet":
-      return "https://rpc-futurenet.stellar.org";
+      return "https://soroban-futurenet.stellar.org";
+    default:
+      return "https://soroban-testnet.stellar.org";
   }
 }
 
+/**
+ * Gets the network passphrase for a network
+ */
 function getNetworkPassphrase(network: "mainnet" | "testnet" | "futurenet"): string {
   switch (network) {
     case "mainnet":
@@ -398,9 +429,18 @@ function getNetworkPassphrase(network: "mainnet" | "testnet" | "futurenet"): str
       return Networks.TESTNET;
     case "futurenet":
       return Networks.FUTURENET;
+    default:
+      return Networks.TESTNET;
   }
 }
 
+/**
+ * Sanitizes a contract name to be used as a filename
+ */
 function sanitizeFileName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return name
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/^[0-9]+/, "_$&")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_|_$/g, "");
 }
