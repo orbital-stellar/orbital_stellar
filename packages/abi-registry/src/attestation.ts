@@ -119,7 +119,7 @@ export type VerifyAttestationOptions = {
 };
 
 /**
- * Verifies an {@link AttestationEnvelope} against SEP §7.4's rules:
+ * Verifies an {@link AttestationEnvelope} against SEP §7.4's rules:
  *
  * 1. `envelope.publicKey` is a well-formed Stellar account address (`G...`).
  * 2. `envelope.publicKey` matches `envelope.payload.attester` - the envelope
