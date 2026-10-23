@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-This file rolls up changes across the public packages: `@orbital-stellar/pulse-core`,
-`@orbital-stellar/pulse-webhooks`, `@orbital-stellar/pulse-notify`, and `@orbital-stellar/abi-registry`.
-Per-package changelogs live in each package directory.
+This file rolls up changes across the seven published packages:
+`@orbital-stellar/pulse-core`, `@orbital-stellar/pulse-webhooks`,
+`@orbital-stellar/pulse-notify`, `@orbital-stellar/abi-registry`,
+`@orbital-stellar/orbital-indexer`, `@orbital-stellar/anchor-sdk` and
+`@orbital-stellar/worker-core`.
+Per-package changelogs live in each package directory (`orbital-indexer` and
+`anchor-sdk` do not have one yet; their README is linked instead).
 
 ## [Unfrozen] — 2026-08-30 — Worker layer (Part C)
 
@@ -124,6 +128,69 @@ below before this entry is considered complete:
   Or pass them explicitly: `new Sep10Client(endpoint, { serverAccountId,
   networkPassphrase, homeDomain, webAuthDomain })`. Anchors that publish no
   `SIGNING_KEY` are now refused rather than trusted.
+
+---
+
+## [0.2.0] - 2026-09-23
+
+All seven packages are published at `0.2.0`. `@orbital-stellar/orbital-indexer`,
+`@orbital-stellar/anchor-sdk` and `@orbital-stellar/worker-core` are on npm for
+the **first time** with this release; `pulse-core`, `pulse-webhooks`,
+`pulse-notify` and `abi-registry` move up from `0.1.0`.
+
+### Breaking Changes
+
+- **`pulse-core`: `CoreConfig.abiRegistry` now defaults to an active registry
+  client instead of `undefined`.** Omitting it resolves the bundled well-known
+  specs (and the on-chain registry once configured), so `decodedData` populates
+  with zero configuration and `contract.emitted` delivery is always
+  asynchronous. Pass `abiRegistry: false` to keep the `0.1.0` behaviour.
+- **`anchor-sdk`: `Sep10Client` now requires the anchor's identity.** It
+  verifies every SEP-10 challenge before handing it to the signer. This is
+  taken under the security exception in [`STABILITY.md`](./STABILITY.md); the
+  advisory and migration steps are in the Security entry under
+  [Unreleased](#unreleased) below. Because `anchor-sdk` has no earlier npm
+  release, no published consumer is affected.
+
+### Per package
+
+- **[`@orbital-stellar/pulse-core`](./packages/pulse-core/CHANGELOG.md#020---2026-09-23)**
+  `decodedData` now carries the decoded event payload rather than the raw ABI
+  spec (a bug fix). New `orbital typegen <contractId>` CLI generates TypeScript
+  interfaces and Zod schemas for a deployed contract, resolving from the
+  on-chain registry first and falling back to WASM auto-discovery.
+- **[`@orbital-stellar/pulse-webhooks`](./packages/pulse-webhooks/CHANGELOG.md#020---2026-09-23)**
+  and **[`@orbital-stellar/pulse-notify`](./packages/pulse-notify/CHANGELOG.md#020---2026-09-23)**
+  No user-facing changes recorded beyond the changelog scaffold; versions are
+  aligned with the release.
+- **[`@orbital-stellar/abi-registry`](./packages/abi-registry/CHANGELOG.md#020---2026-09-23)**
+  The decoding standard takes shape: a normative semantic-taxonomy format with
+  `validateTaxonomyEntry()` and `findTaxonomyConflicts()`; an
+  `abi-registry verify` CLI with distinct exit codes per verdict; on-chain
+  registry support (`OnChainRegistryPublisher`, `OnChainAbiRegistryClient`);
+  WASM auto-discovery of a contract's embedded spec
+  (`discoverContractSpec()`); `createDefaultAbiRegistryClient()` composing the
+  bundled specs with the on-chain registry; and canonical `ContractSpec`
+  typegen. SEP-41 events were added to the bundled USDC, EURC, AQUA and native
+  asset specs.
+- **[`@orbital-stellar/orbital-indexer`](./packages/orbital-indexer/README.md)** *(first publish)*
+  `AutoPublishIndexer` watches an `EventEngine`'s contract stream for contracts
+  the registry has no spec for, discovers their interface from the WASM, and
+  publishes it to the on-chain registry, so the registry fills in as part of
+  normal operation. Manual `abi-registry publish` stays as the override.
+- **[`@orbital-stellar/anchor-sdk`](./packages/anchor-sdk/README.md)** *(first publish)*
+  Typed anchor clients for SEP-1 discovery, SEP-10 authentication, SEP-12 KYC,
+  SEP-24 interactive deposit/withdraw and SEP-31 cross-border payments, each
+  response validated against a schema. It never holds a secret key: every flow
+  that signs takes a caller-supplied callback.
+- **[`@orbital-stellar/worker-core`](./packages/worker-core/CHANGELOG.md#020---2026-09-23)** *(first publish)*
+  The worker runtime: `WorkerDefinition` with time, event and computation
+  triggers; interval and cron schedules with explicit time zones; an
+  event-trigger class with declarative predicates; a subscription model with
+  subscriber webhooks and an audit trail; backstop latency tiers, cost metering
+  and a subscription lifecycle; and price and slippage guard rails. The
+  latency-tier stub and the copy-trade worker and vault were removed unbuilt
+  (see [`docs/design/workers.md`](./docs/design/workers.md) section 6).
 
 ---
 
