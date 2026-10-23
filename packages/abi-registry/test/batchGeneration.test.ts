@@ -66,6 +66,8 @@ describe("batchGeneration", () => {
   ): OrbitalConfig => ({ contracts, outDir: "generated", ...extra });
 
   beforeEach(() => {
+    // Reset first: the previous test may have pointed tmpdir() at a bad path.
+    h.tmpdirOverride.value = undefined;
     dir = mkdtempSync(join(tmpdir(), "orbital-batch-"));
     configPath = join(dir, "orbital.config.json");
     h.registryCtor.mockReset();
@@ -73,7 +75,6 @@ describe("batchGeneration", () => {
     h.discover.mockReset().mockResolvedValue(makeSpec("Discovered"));
     h.bundled.mockReset().mockReturnValue(new Map());
     h.rmSync.mockClear();
-    h.tmpdirOverride.value = undefined;
     warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
