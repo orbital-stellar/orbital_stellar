@@ -9,7 +9,7 @@
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022-339933?style=flat-square&logo=node.js)](.github/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?style=flat-square&logo=conventionalcommits)](https://www.conventionalcommits.org)
 
-> **Status**: `v0.1.0` on npm &nbsp;·&nbsp; **Contracts**: testnet only &nbsp;·&nbsp; **License**: MIT
+> **Status**: `v0.2.0` on npm &nbsp;·&nbsp; **Contracts**: testnet only &nbsp;·&nbsp; **License**: MIT
 >
 > The libraries read both networks. Orbital's own contracts are deployed to testnet and have not been deployed to mainnet - see [What works today](#what-works-today).
 
@@ -59,25 +59,27 @@ Four different states get conflated in most project READMEs. They are separated 
 
 | Capability | On npm | In this repo | Notes |
 |---|---|---|---|
-| Horizon subscription + classic event taxonomy | ✅ `0.1.0` | ✅ | Payments, account ops, trustlines, offers, claimables, liquidity pools, manage-data |
-| Reconnection, rate-limit backoff, cursor persistence | ✅ `0.1.0` | ✅ | |
-| HMAC webhook delivery + verification | ⚠️ partial | ✅ | Retry-queue and signing exports landed after `0.1.0` |
-| React hooks | ✅ `0.1.0` | ✅ | 4.6 kB gzip |
-| **Soroban contract-event subscription** | ❌ | ✅ | `CoreConfig.soroban` on the published build has no `rpcUrl`. Needs the next release - see [#1132](https://github.com/determined-001/orbital_stellar/issues/1132) |
-| ABI registry client + WASM auto-discovery | ⚠️ partial | ✅ | |
-| Worker layer (`worker-core`) | ❌ unpublished | ⚠️ partial | Triggers, scheduling, verification and reputation exist. Workers call functions anyone could call - `contracts/payroll`'s `disburse()` is the reference. No custody anywhere. |
+| Horizon subscription + classic event taxonomy | ✅ `0.2.0` | ✅ | Payments, account ops, trustlines, offers, claimables, liquidity pools, manage-data |
+| Reconnection, rate-limit backoff, cursor persistence | ✅ `0.2.0` | ✅ | |
+| HMAC webhook delivery + verification | ✅ `0.2.0` | ✅ | Durable retry queues (memory, Redis, Postgres) and signing/verification exports |
+| React hooks | ✅ `0.2.0` | ✅ | 4.6 kB gzip |
+| **Soroban contract-event subscription** | ✅ `0.2.0` | ✅ | `CoreConfig.soroban.rpcUrl` configures the Soroban RPC endpoint. [#1132](https://github.com/determined-001/orbital_stellar/issues/1132) is closed |
+| ABI registry client + WASM auto-discovery | ✅ `0.2.0` | ✅ | `discoverContractSpec()`, `createDefaultAbiRegistryClient()`, the `abi-registry verify` CLI, and bundled USDC / EURC / AQUA / native-asset specs |
+| Auto-publish indexer (`orbital-indexer`) | ✅ `0.2.0` (first publish) | ✅ | Discovers specs for unregistered contracts from their WASM and publishes them on-chain |
+| Anchor clients (`anchor-sdk`) | ✅ `0.2.0` (first publish) | ✅ | SEP-1, SEP-10, SEP-12, SEP-24 and SEP-31. Never holds a secret key |
+| Worker layer (`worker-core`) | ✅ `0.2.0` (first publish) | ⚠️ partial | Triggers, scheduling, verification and reputation exist. Workers call functions anyone could call - `contracts/payroll`'s `disburse()` is the reference. No custody anywhere. |
 
-**The published packages are behind this repository.** `0.1.0` predates a large amount of the work here, most consequentially Soroban RPC configuration. If you need contract-event subscription today, install from source. Tracked as [#1132](https://github.com/determined-001/orbital_stellar/issues/1132).
+**npm carries the `0.2.0` release; `main` can be ahead of it between releases.** Unreleased work is listed under `[Unreleased]` in the [CHANGELOG](CHANGELOG.md), and you can always install from source (see [Quickstart](#quickstart)).
 
 ### On-chain status
 
 | Contract | Testnet | Mainnet |
 |---|---|---|
-| `registry` | deployed, **never invoked** | not deployed |
-| `demo-emitter` | deployed, **never invoked** | not deployed (testnet fixture by design) |
+| `registry` | deployed, 4 specs published | not deployed |
+| `demo-emitter` | deployed | not deployed (testnet fixture by design) |
 | `payroll` | deployed | not deployed |
 
-"Never invoked" is meant literally and is checkable: the deployer account has submitted only `UploadContractWasm` and `CreateContract` operations, no `InvokeContract`, and `getEvents` returns nothing for either contract across the RPC retention window. No spec has been registered in the registry yet.
+The testnet `registry` holds four published specs - USD Coin (USDC), Euro Coin (EURC), Aquarius (AQUA) and the native asset wrapper (XLM SAC) - each recorded with its spec hash and publisher under `seededSpecs` in [`contracts/deployed.testnet.json`](contracts/deployed.testnet.json), which is the source of record for every contract ID and WASM hash. Nothing is deployed to mainnet; see [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md).
 
 ---
 
@@ -89,6 +91,9 @@ Four different states get conflated in most project READMEs. They are separated 
 | [`@orbital-stellar/pulse-webhooks`](./packages/pulse-webhooks) | HMAC-signed webhook delivery + verification (Node + edge runtimes), durable retry queues | ✅ Shipped |
 | [`@orbital-stellar/pulse-notify`](./packages/pulse-notify) | React hooks - `useStellarEvent`, `useContractEvent`, `useStellarPayment`, `useStellarActivity`, `useStellarAddresses`, `useStellarHistory`, `StellarConnectionStatus`, `StellarEventBoundary` | ✅ Shipped |
 | [`@orbital-stellar/abi-registry`](./packages/abi-registry) | Canonical Soroban ABI client, schema helpers, and registry publisher interface | ✅ Shipped |
+| [`@orbital-stellar/orbital-indexer`](./packages/orbital-indexer) | Auto-publish indexer - discovers specs for unregistered contracts and publishes them to the on-chain registry | ✅ Shipped |
+| [`@orbital-stellar/anchor-sdk`](./packages/anchor-sdk) | Typed clients for SEP-1 discovery, SEP-10 auth, SEP-12 KYC, SEP-24 and SEP-31 | ✅ Shipped |
+| [`@orbital-stellar/worker-core`](./packages/worker-core) | Worker runtime - triggers, schedules, subscriptions and guard rails; no custody | ✅ Shipped |
 
 > The full classic-operation taxonomy is shipped (payments, account create/merge/options/bump-sequence, trustlines + auth, offers, claimables, liquidity pools, manage-data), alongside Soroban contract event subscription (`engine.subscribeContract`), cursor persistence, and the ABI registry client - see [`ROADMAP.md`](ROADMAP.md).
 
@@ -115,14 +120,10 @@ pnpm add @orbital-stellar/pulse-core             # always
 pnpm add @orbital-stellar/pulse-webhooks         # if you push events to HTTPS endpoints
 pnpm add @orbital-stellar/pulse-notify react     # if you render live events in React
 pnpm add @orbital-stellar/abi-registry           # if you decode Soroban contract events
+pnpm add @orbital-stellar/orbital-indexer        # if you auto-publish specs for unregistered contracts
+pnpm add @orbital-stellar/anchor-sdk             # if you integrate with Stellar anchors
+pnpm add @orbital-stellar/worker-core            # if you run workers
 ```
-
-> **Soroban contract events need a build newer than `0.1.0`.** The published
-> `pulse-core` cannot be configured with a Soroban RPC endpoint, so contract
-> subscription is unreachable from npm until the next release
-> ([#1132](https://github.com/determined-001/orbital_stellar/issues/1132)).
-> The Horizon/classic examples below work against `0.1.0` as written; clone the
-> repo for the Soroban ones.
 
 Or clone the repo to work from source:
 
