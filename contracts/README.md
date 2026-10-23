@@ -172,6 +172,9 @@ stellar keys add orbital-deployer     # one-time; fund it with real XLM
 ```
 
 Deploys the registry and payroll contracts and writes `deployed.mainnet.json`.
+Read [`docs/mainnet-deployment.md`](../docs/mainnet-deployment.md) first: it
+covers key custody, the pre-flight checklist, and how the registry client picks
+up the mainnet registry afterwards.
 
 **demo-emitter is deliberately excluded from mainnet.** It is a testnet fixture
 that exists so the docs, starters and e2e tests have a contract that emits on

@@ -44,7 +44,9 @@ DEPLOYER_IDENTITY=orbital-deployer ./deploy_testnet.sh
 
 The network is the script's identity, not an environment variable: `deploy.sh`
 takes it as an argument and `deploy_testnet.sh` passes `testnet`. For the
-public network use `./deploy_mainnet.sh` - see `contracts/README.md`.
+public network use `./deploy_mainnet.sh` - see `contracts/README.md` and
+[`mainnet-deployment.md`](./mainnet-deployment.md) for key custody and the
+pre-flight checklist.
 
 This will:
 - Deploy the `orbital_abi_registry` contract to testnet

@@ -9,6 +9,10 @@ import {
   ORBITAL_REGISTRY_PUBLISHER_ADDRESS,
   ORBITAL_REGISTRY_TESTNET_RPC_URL,
   ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE,
+  ORBITAL_REGISTRY_MAINNET_CONTRACT_ID,
+  ORBITAL_REGISTRY_MAINNET_PUBLISHER_ADDRESS,
+  ORBITAL_REGISTRY_MAINNET_RPC_URL,
+  ORBITAL_REGISTRY_MAINNET_NETWORK_PASSPHRASE,
   ORBITAL_HOSTED_REGISTRY_BASE_URL,
 } from "./registryConstants.js";
 
@@ -34,7 +38,65 @@ export type CreateDefaultAbiRegistryClientOptions = {
    * Defaults to `false`.
    */
   chainOnly?: boolean;
+
+  /**
+   * Network whose on-chain registry the last link of the chain reads.
+   * `"testnet"` uses the testnet registry; `"mainnet"` uses the mainnet
+   * registry, and while that is not deployed (its constants are empty) the
+   * on-chain link is skipped rather than silently falling back to testnet.
+   * `"futurenet"` has no Orbital registry, so its on-chain link is skipped too.
+   *
+   * Defaults to `"testnet"`, which is what the chain did before this option
+   * existed.
+   */
+  network?: "mainnet" | "testnet" | "futurenet";
 };
+
+type OnChainTarget = {
+  contractId: string;
+  rpcUrl: string;
+  networkPassphrase: string;
+  publisher: string;
+};
+
+/**
+ * The on-chain registry to read for a network, or `undefined` when there is
+ * none to read. Each field honours its environment override first, then the
+ * shipped constant. A mainnet target needs the contract ID, RPC URL and
+ * publisher together: reading a registry without knowing whose publications
+ * to trust, or where to reach it, is not a lookup that can succeed.
+ */
+function resolveOnChainTarget(
+  network: "mainnet" | "testnet" | "futurenet",
+): OnChainTarget | undefined {
+  if (network === "futurenet") return undefined;
+
+  if (network === "mainnet") {
+    const contractId =
+      readEnv("ORBITAL_REGISTRY_MAINNET_CONTRACT_ID") ?? ORBITAL_REGISTRY_MAINNET_CONTRACT_ID;
+    const rpcUrl = readEnv("ORBITAL_REGISTRY_MAINNET_RPC_URL") ?? ORBITAL_REGISTRY_MAINNET_RPC_URL;
+    const publisher =
+      readEnv("ORBITAL_REGISTRY_MAINNET_PUBLISHER_ADDRESS") ??
+      ORBITAL_REGISTRY_MAINNET_PUBLISHER_ADDRESS;
+    if (!contractId || !rpcUrl || !publisher) return undefined;
+    return {
+      contractId,
+      rpcUrl,
+      networkPassphrase: ORBITAL_REGISTRY_MAINNET_NETWORK_PASSPHRASE,
+      publisher,
+    };
+  }
+
+  const contractId =
+    readEnv("ORBITAL_REGISTRY_TESTNET_CONTRACT_ID") ?? ORBITAL_REGISTRY_TESTNET_CONTRACT_ID;
+  if (!contractId) return undefined;
+  return {
+    contractId,
+    rpcUrl: readEnv("ORBITAL_REGISTRY_TESTNET_RPC_URL") ?? ORBITAL_REGISTRY_TESTNET_RPC_URL,
+    networkPassphrase: ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE,
+    publisher: readEnv("ORBITAL_REGISTRY_PUBLISHER_ADDRESS") ?? ORBITAL_REGISTRY_PUBLISHER_ADDRESS,
+  };
+}
 
 function readEnv(name: string): string | undefined {
   const value = typeof process !== "undefined" ? process.env[name] : undefined;
@@ -53,8 +115,9 @@ function readEnv(name: string): string | undefined {
  *    hash mismatch, so an outage here never blocks resolution. Skipped when
  *    `options.chainOnly` is `true` or when
  *    {@link ORBITAL_HOSTED_REGISTRY_BASE_URL} is empty.
- * 4. **On-chain registry** – Orbital's testnet registry (once deployed and
- *    {@link ORBITAL_REGISTRY_TESTNET_CONTRACT_ID} is populated).
+ * 4. **On-chain registry** – Orbital's registry for `options.network`
+ *    (default `"testnet"`; `"mainnet"` once its constants are populated).
+ *    Skipped when no registry is deployed for that network.
  *
  * Used when `CoreConfig.abiRegistry` is omitted; pass `abiRegistry: false`
  * to opt out of default resolution entirely and preserve pre-default behavior
@@ -73,25 +136,13 @@ export function createDefaultAbiRegistryClient(
 
   clients.push(new BundledWellKnownClient());
 
-  const registryContractId =
-    readEnv("ORBITAL_REGISTRY_TESTNET_CONTRACT_ID") ?? ORBITAL_REGISTRY_TESTNET_CONTRACT_ID;
-  const publisherAddress =
-    readEnv("ORBITAL_REGISTRY_PUBLISHER_ADDRESS") ?? ORBITAL_REGISTRY_PUBLISHER_ADDRESS;
-  const rpcUrl = readEnv("ORBITAL_REGISTRY_TESTNET_RPC_URL") ?? ORBITAL_REGISTRY_TESTNET_RPC_URL;
   const hostedBaseUrl =
     readEnv("ORBITAL_HOSTED_REGISTRY_BASE_URL") ?? ORBITAL_HOSTED_REGISTRY_BASE_URL;
 
   // Build the on-chain client first so it can be passed to the hosted client
   // for sampled hash verification.
-  let onChainClient: OnChainAbiRegistryClient | undefined;
-  if (registryContractId) {
-    onChainClient = new OnChainAbiRegistryClient({
-      contractId: registryContractId,
-      rpcUrl,
-      networkPassphrase: ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE,
-      publisher: publisherAddress,
-    });
-  }
+  const target = resolveOnChainTarget(options?.network ?? "testnet");
+  const onChainClient = target ? new OnChainAbiRegistryClient(target) : undefined;
 
   // Insert the hosted client ahead of the on-chain client unless opted out.
   if (!chainOnly && hostedBaseUrl) {

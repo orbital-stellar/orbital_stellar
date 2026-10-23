@@ -42,6 +42,37 @@ export const ORBITAL_REGISTRY_TESTNET_RPC_URL = "https://soroban-testnet.stellar
 export const ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 
 /**
+ * Mainnet counterparts of the testnet registry constants above. All three are
+ * deliberately empty: there is no mainnet registry deployment yet (see
+ * docs/mainnet-deployment.md), and a testnet ID is never a valid fallback for
+ * the public network - a lookup there is an always-fails detour, and worse, it
+ * would present testnet records as if they were authoritative on mainnet.
+ *
+ * While the contract ID, RPC URL or publisher is empty,
+ * {@link createDefaultAbiRegistryClient} called with `network: "mainnet"`
+ * skips the on-chain link entirely and resolves only the bundled specs. Fill
+ * all three from `contracts/deployed.mainnet.json` after a real pubnet deploy,
+ * or override per process with `ORBITAL_REGISTRY_MAINNET_CONTRACT_ID`,
+ * `ORBITAL_REGISTRY_MAINNET_RPC_URL` and
+ * `ORBITAL_REGISTRY_MAINNET_PUBLISHER_ADDRESS`.
+ */
+export const ORBITAL_REGISTRY_MAINNET_CONTRACT_ID = "";
+
+/** Soroban RPC endpoint the mainnet registry is read through. Empty until deployed. */
+export const ORBITAL_REGISTRY_MAINNET_RPC_URL = "";
+
+/** The publisher address Orbital's specs are filed under on mainnet. Empty until seeded. */
+export const ORBITAL_REGISTRY_MAINNET_PUBLISHER_ADDRESS = "";
+
+/**
+ * The public network's passphrase, as a literal for the same reason as
+ * {@link ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE}: building the default
+ * chain must not depend on the SDK's `Networks` export being present.
+ */
+export const ORBITAL_REGISTRY_MAINNET_NETWORK_PASSPHRASE =
+  "Public Global Stellar Network ; September 2015";
+
+/**
  * Base URL of Orbital's hosted ABI registry service. When populated,
  * {@link createDefaultAbiRegistryClient} inserts a
  * {@link HostedAbiRegistryClient} ahead of the on-chain link in the default
