@@ -12,7 +12,7 @@ import {
   formatDriftReport,
   LockFileError,
 } from "../src/lockFile.js";
-import type { LockFile, ContractConfig } from "../src/config.js";
+import type { LockFile } from "../src/config.js";
 import type { ContractSpec } from "../src/spec.js";
 
 const VALID_CONTRACT_ID_1 = "C" + "A".repeat(55);

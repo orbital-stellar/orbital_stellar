@@ -2,7 +2,7 @@ import { Watcher } from "@orbital-stellar/pulse-core";
 import type { NormalizedEvent } from "@orbital-stellar/pulse-core";
 import { WebhookDelivery } from "@orbital-stellar/pulse-webhooks";
 import type { WebhookConfig, DeadLetterStore } from "@orbital-stellar/pulse-webhooks";
-import type { WorkerEvent, WorkerFiredEvent, WorkerMissedEvent, WorkerFailure } from "./events.js";
+import type { WorkerEvent, WorkerFiredEvent, WorkerMissedEvent } from "./events.js";
 
 /**
  * Configuration for worker webhook notifications.

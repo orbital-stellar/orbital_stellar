@@ -223,7 +223,7 @@ describe("useContractEvent Hook", () => {
       return <div data-testid="mounted">mounted</div>;
     }
 
-    const { getByTestId, findByText, unmount } = render(<MountedHook />);
+    const { findByText, unmount } = render(<MountedHook />);
     await findByText("mounted", { selector: '[data-testid="mounted"]' });
 
     // Connection should exist while mounted

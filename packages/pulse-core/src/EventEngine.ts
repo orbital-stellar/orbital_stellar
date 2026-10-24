@@ -1966,7 +1966,7 @@ export class EventEngine {
             this.pauseSource("horizon");
             this.pauseSource("soroban");
             this.wePausedSourcesForBackpressure = true;
-          } catch (err) {
+          } catch {
             /* swallow - pauseSource logs */
           }
           this.notifyWatchers("engine.backpressure", {
@@ -2039,7 +2039,7 @@ export class EventEngine {
             try {
               this.resumeSource("horizon");
               this.resumeSource("soroban");
-            } catch (err) {
+            } catch {
               /* swallow */
             }
             this.wePausedSourcesForBackpressure = false;

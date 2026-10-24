@@ -1,9 +1,8 @@
 import { mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import type { OrbitalConfig, ContractConfig } from "./config.js";
-import { validateConfig } from "./config.js";
 import type { ContractSpec } from "./spec.js";
 import { generateContractTypes } from "./generate.js";
 import { discoverContractSpec } from "./discovery/discoverContract.js";
@@ -317,6 +316,7 @@ async function resolveContractSpec(
   } catch (error) {
     throw new Error(
       `Invalid RPC URL '${rpcUrl}': ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 
@@ -380,25 +380,28 @@ async function resolveContractSpec(
       if (error.message.includes("contract not found") || error.message.includes("404")) {
         throw new Error(
           `${baseMessage}: Contract not found on ${network} network. Verify the contract ID and network.`,
+          { cause: error },
         );
       }
 
       if (error.message.includes("network") || error.message.includes("connection")) {
         throw new Error(
           `${baseMessage}: Network error when connecting to ${rpcUrl}. Check your connection and RPC endpoint.`,
+          { cause: error },
         );
       }
 
       if (error.message.includes("NoEmbeddedSpecError")) {
         throw new Error(
           `${baseMessage}: Contract has no embedded spec (likely a Stellar Asset Contract). Consider publishing the spec to the registry.`,
+          { cause: error },
         );
       }
 
-      throw new Error(`${baseMessage}: ${error.message}`);
+      throw new Error(`${baseMessage}: ${error.message}`, { cause: error });
     }
 
-    throw new Error(`${baseMessage}: ${String(error)}`);
+    throw new Error(`${baseMessage}: ${String(error)}`, { cause: error });
   }
 }
 

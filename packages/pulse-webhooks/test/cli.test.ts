@@ -161,13 +161,12 @@ describe("cli", () => {
       });
       const entry1 = store.get(id1)!;
 
-      const id2 = await store.record({
+      await store.record({
         url: "https://a.example.com",
         event,
         error: "boom",
         attempts: 1,
       });
-      const entry2 = store.get(id2)!;
 
       await store.record({ url: "https://b.example.com", event, error: "boom", attempts: 1 });
 
@@ -350,7 +349,6 @@ describe("cli", () => {
       });
 
       store.setReplayHandler(async () => {
-        // eslint-disable-next-line no-throw-literal
         throw "string error";
       });
 

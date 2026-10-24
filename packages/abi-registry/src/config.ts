@@ -362,6 +362,7 @@ function loadLegacyConfigFile(configPath: string): OrbitalCodegenConfig {
       `Synchronous compatibility loader could not evaluate this config. Prefer loadConfig() for full module support. ${
         error instanceof Error ? error.message : String(error)
       }`,
+      { cause: error },
     );
   }
 }

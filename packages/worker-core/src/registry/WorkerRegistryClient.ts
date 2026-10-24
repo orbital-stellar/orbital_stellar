@@ -9,7 +9,6 @@
 import {
   validateOperatorRecord,
   validateWorkerOfferingRecord,
-  LruCache,
   TtlLruCache,
 } from "@orbital-stellar/abi-registry";
 import type {

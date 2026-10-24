@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   Sep24Client,
-  Sep24CustomerInfoNeededError,
   Sep24Error,
   Sep24StatusMachine,
   InvalidSep24TransitionError,

@@ -1,5 +1,3 @@
-import type { NormalizedEvent } from "@orbital-stellar/pulse-core";
-
 /**
  * Event type for a worker that successfully fired.
  */
