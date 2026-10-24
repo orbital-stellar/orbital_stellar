@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Keypair } from "@stellar/stellar-sdk";
+import { signAttestation } from "@orbital-stellar/abi-registry";
 import {
   signComputationAttestation,
   verifyComputationAttestation,
@@ -42,6 +43,21 @@ describe("verifyComputationAttestation", () => {
     const tampered = { ...envelope, payload: { ...envelope.payload, result: { price: "999.99" } } };
 
     const result = verifyComputationAttestation(tampered, {
+      declaredSources: [source.publicKey()],
+      expectedWindowId: "payroll-w1:c:occ-1",
+      expectedConditionId: "oracle-resolution",
+    });
+
+    expect(result).toMatchObject({ status: "invalid", reason: "bad-signature" });
+  });
+
+  it("rejects an envelope signed under abi-registry's schema-attestation domain (no cross-protocol replay)", () => {
+    const source = Keypair.random();
+    // Same key, same document, but signed as a contract event-schema
+    // attestation rather than a computation result.
+    const envelope = signAttestation(makeDocument(source.publicKey()), source.secret());
+
+    const result = verifyComputationAttestation(envelope, {
       declaredSources: [source.publicKey()],
       expectedWindowId: "payroll-w1:c:occ-1",
       expectedConditionId: "oracle-resolution",

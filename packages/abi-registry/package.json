@@ -13,6 +13,8 @@
     "dist",
     "bin",
     "schema",
+    "schemas",
+    "test-vectors",
     "specs/well-known",
     "README.md",
     "LICENSE"

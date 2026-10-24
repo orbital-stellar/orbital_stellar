@@ -1,10 +1,15 @@
+import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { Keypair } from "@stellar/stellar-sdk";
 import {
   signAttestation,
   verifyAttestation,
   canonicalizeAttestation,
+  attestationSigningDigest,
+  attestationSigningMessage,
+  attestationExpiryProblem,
   AttestationSigningError,
+  ATTESTATION_DOMAIN,
 } from "../src/attestation.js";
 import type { AttestationEnvelope } from "../src/attestation.js";
 import type { AttestationDocument } from "../src/types.js";
@@ -110,6 +115,7 @@ describe("verifyAttestation rejection rules", () => {
 
     expect(verifyAttestation(tampered)).toEqual({
       status: "invalid",
+      code: "bad-signature",
       reason: expect.stringContaining("signature"),
     });
   });
@@ -122,15 +128,16 @@ describe("verifyAttestation rejection rules", () => {
     // signing key), so construct the mismatched envelope directly to
     // exercise verifyAttestation's own check.
     const document = makeDocument(impersonated.publicKey());
-    const payloadBytes = Buffer.from(canonicalizeAttestation(document), "utf8");
     const envelope: AttestationEnvelope = {
+      v: 1,
       payload: document,
       publicKey: signer.publicKey(),
-      signature: signer.sign(payloadBytes).toString("base64"),
+      signature: signer.sign(attestationSigningDigest(document)).toString("base64"),
     };
 
     expect(verifyAttestation(envelope)).toEqual({
       status: "invalid",
+      code: "attester-mismatch",
       reason: expect.stringContaining("does not match payload.attester"),
     });
   });
@@ -139,18 +146,19 @@ describe("verifyAttestation rejection rules", () => {
     const signer = Keypair.random();
     const claimedSigner = Keypair.random();
     const document = makeDocument(claimedSigner.publicKey());
-    const payloadBytes = Buffer.from(canonicalizeAttestation(document), "utf8");
 
     // publicKey matches payload.attester (passes the attester-match check),
     // but the signature bytes were actually produced by a different key.
     const envelope: AttestationEnvelope = {
+      v: 1,
       payload: document,
       publicKey: claimedSigner.publicKey(),
-      signature: signer.sign(payloadBytes).toString("base64"),
+      signature: signer.sign(attestationSigningDigest(document)).toString("base64"),
     };
 
     expect(verifyAttestation(envelope)).toEqual({
       status: "invalid",
+      code: "bad-signature",
       reason: expect.stringContaining("signature"),
     });
   });
@@ -164,6 +172,7 @@ describe("verifyAttestation rejection rules", () => {
 
     expect(verifyAttestation(malformed)).toEqual({
       status: "invalid",
+      code: "bad-public-key",
       reason: expect.stringContaining("not a valid Stellar account address"),
     });
   });
@@ -175,6 +184,7 @@ describe("verifyAttestation rejection rules", () => {
 
     expect(verifyAttestation(envelope, { expectedWasmHash: "d".repeat(64) })).toEqual({
       status: "invalid",
+      code: "wasm-hash-mismatch",
       reason: expect.stringContaining("does not match the on-chain WASM hash"),
     });
   });
@@ -203,7 +213,145 @@ describe("signAttestation / verifyAttestation for a stellarAsset (SAC) document"
 
     expect(verifyAttestation(envelope, { expectedWasmHash: "d".repeat(64) })).toEqual({
       status: "invalid",
+      code: "not-a-wasm-attestation",
       reason: expect.stringContaining('executableKind is "stellarAsset"'),
     });
+  });
+});
+
+describe("envelope v1: SEP-53 signing and domain separation", () => {
+  it("stamps the envelope with version 1", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(makeDocument(keypair.publicKey()), keypair.secret());
+    expect(envelope.v).toBe(1);
+  });
+
+  it("signs the SEP-53 digest of `domain\\n` + canonical JSON, so a wallet's signMessage can produce it", () => {
+    const keypair = Keypair.random();
+    const document = makeDocument(keypair.publicKey());
+    const message = `${ATTESTATION_DOMAIN}\n${canonicalizeAttestation(document)}`;
+    expect(attestationSigningMessage(document)).toBe(message);
+
+    // What a SEP-53 signer does: sign SHA-256("Stellar Signed Message:\n" + message).
+    const digest = createHash("sha256")
+      .update(Buffer.from(`Stellar Signed Message:\n${message}`, "utf8"))
+      .digest();
+    const envelope: AttestationEnvelope = {
+      v: 1,
+      payload: document,
+      publicKey: keypair.publicKey(),
+      signature: keypair.sign(digest).toString("base64"),
+    };
+
+    expect(verifyAttestation(envelope)).toEqual({ status: "valid" });
+    expect(signAttestation(document, keypair.secret()).signature).toBe(envelope.signature);
+  });
+
+  it("does not verify a pre-v1 signature over the bare canonical bytes", () => {
+    const keypair = Keypair.random();
+    const document = makeDocument(keypair.publicKey());
+    const legacy = {
+      payload: document,
+      publicKey: keypair.publicKey(),
+      signature: keypair
+        .sign(Buffer.from(canonicalizeAttestation(document), "utf8"))
+        .toString("base64"),
+    } as unknown as AttestationEnvelope;
+
+    expect(verifyAttestation(legacy)).toMatchObject({
+      status: "invalid",
+      code: "unsupported-version",
+    });
+    expect(verifyAttestation({ ...legacy, v: 1 })).toMatchObject({
+      status: "invalid",
+      code: "bad-signature",
+    });
+  });
+
+  it("rejects an unknown envelope version", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(makeDocument(keypair.publicKey()), keypair.secret());
+    expect(
+      verifyAttestation({ ...envelope, v: 2 } as unknown as AttestationEnvelope),
+    ).toMatchObject({ status: "invalid", code: "unsupported-version" });
+  });
+
+  it("rejects an envelope signed under a different domain", () => {
+    const keypair = Keypair.random();
+    const document = makeDocument(keypair.publicKey());
+    const envelope = signAttestation(document, keypair.secret(), { domain: "other-thing-v1" });
+
+    expect(verifyAttestation(envelope)).toMatchObject({ status: "invalid", code: "bad-signature" });
+    expect(verifyAttestation(envelope, { domain: "other-thing-v1" })).toEqual({ status: "valid" });
+  });
+
+  it.each(["", "Orbital-v1", "orbital", "orbital-v0", "orbital v1", "orbital-v1\n"])(
+    "rejects the malformed domain %j",
+    (domain) => {
+      const keypair = Keypair.random();
+      expect(() =>
+        signAttestation(makeDocument(keypair.publicKey()), keypair.secret(), { domain }),
+      ).toThrow(AttestationSigningError);
+    },
+  );
+
+  it("refuses to sign a document that can't be canonicalized", () => {
+    const keypair = Keypair.random();
+    const document = makeDocument(keypair.publicKey(), {
+      createdAt: Number.NaN as unknown as string,
+    });
+    expect(() => signAttestation(document, keypair.secret())).toThrow(AttestationSigningError);
+  });
+});
+
+describe("verifyAttestation expiry", () => {
+  const NOW = new Date("2026-06-01T00:00:00Z");
+
+  it("accepts an attestation that has not expired", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(
+      makeDocument(keypair.publicKey(), { expiresAt: "2026-07-01T00:00:00Z" }),
+      keypair.secret(),
+    );
+    expect(verifyAttestation(envelope, { now: NOW })).toEqual({ status: "valid" });
+  });
+
+  it("rejects an expired attestation, including at the exact expiry instant", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(
+      makeDocument(keypair.publicKey(), { expiresAt: "2026-06-01T00:00:00Z" }),
+      keypair.secret(),
+    );
+    expect(verifyAttestation(envelope, { now: NOW })).toMatchObject({
+      status: "invalid",
+      code: "expired",
+    });
+  });
+
+  it("rejects an unparseable expiresAt rather than treating it as never expiring", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(
+      makeDocument(keypair.publicKey(), { expiresAt: "next tuesday" }),
+      keypair.secret(),
+    );
+    expect(verifyAttestation(envelope, { now: NOW })).toMatchObject({
+      status: "invalid",
+      code: "malformed-expiry",
+    });
+  });
+
+  it("skips the expiry check when asked to", () => {
+    const keypair = Keypair.random();
+    const envelope = signAttestation(
+      makeDocument(keypair.publicKey(), { expiresAt: "2020-01-01T00:00:00Z" }),
+      keypair.secret(),
+    );
+    expect(verifyAttestation(envelope, { now: NOW, checkExpiry: false })).toEqual({
+      status: "valid",
+    });
+  });
+
+  it("attestationExpiryProblem treats a missing expiresAt as never expiring", () => {
+    expect(attestationExpiryProblem({}, NOW)).toBeUndefined();
   });
 });

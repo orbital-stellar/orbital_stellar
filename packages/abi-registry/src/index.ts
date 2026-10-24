@@ -173,13 +173,40 @@ export {
   signAttestation,
   verifyAttestation,
   canonicalizeAttestation,
+  attestationSigningMessage,
+  attestationSigningDigest,
+  attestationExpiryProblem,
+  assertAttestationDomain,
   AttestationSigningError,
+  ATTESTATION_DOMAIN,
+  ATTESTATION_ENVELOPE_VERSION,
+  SEP53_MESSAGE_PREFIX,
 } from "./attestation.js";
 export type {
   AttestationEnvelope,
+  AttestationInvalidCode,
   AttestationVerdict,
+  SignAttestationOptions,
   VerifyAttestationOptions,
 } from "./attestation.js";
+
+export { canonicalizeJson, CanonicalJsonError } from "./canonicalJson.js";
+
+export {
+  attestationHash,
+  classifyAttester,
+  meetsMinimumTrust,
+  resolveAttestations,
+  resolveAttestationsWithDeployer,
+} from "./attestationPolicy.js";
+export type {
+  AttestationTrust,
+  DeployerResolver,
+  RejectedAttestation,
+  ResolveAttestationsOptions,
+  ResolveAttestationsResult,
+  ResolvedAttestation,
+} from "./attestationPolicy.js";
 
 export { InMemoryVerdictStore } from "./verdictStore.js";
 export type { VerdictStore, VerdictRecord, VerdictStatus } from "./verdictStore.js";

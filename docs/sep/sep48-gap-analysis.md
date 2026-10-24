@@ -286,6 +286,10 @@ boundary moves.
    wallet or library verify an Orbital attestation without custom code. Tracked
    as a follow-up to 7.4, not resolved by this memo.
 
+   **Resolved** in envelope version 1: `signAttestation` now signs the SEP-53
+   digest of `domain + "\n" + canonical JSON`, with RFC 8785 canonicalization
+   and a per-document-kind domain. See SEP draft §5.4.
+
 5. **Do not build on SEP-47.** It is Draft, dormant since 2025-04-16, and even
    fully realized only conveys "which SEPs do I claim to implement". Orbital's
    taxonomy should stand alone and interoperate with SEP-47 if it revives.

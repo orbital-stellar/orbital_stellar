@@ -14,10 +14,18 @@
  * should eventually live somewhere more central than `abi-registry`.
  */
 import {
+  attestationExpiryProblem,
   signAttestation,
   verifyAttestation,
   type AttestationEnvelope,
 } from "@orbital-stellar/abi-registry";
+
+/**
+ * Signing domain of a computation attestation. Distinct from abi-registry's
+ * `orbital-attestation-v1` so a signature made for a contract event-schema
+ * attestation can never be replayed as a computation result, or the reverse.
+ */
+export const COMPUTATION_ATTESTATION_DOMAIN = "orbital-computation-attestation-v1";
 
 /**
  * What a computation source attests to (design note §3.1). Four properties
@@ -63,7 +71,7 @@ export function signComputationAttestation(
   document: ComputationAttestation,
   attesterSecret: string,
 ): ComputationAttestationEnvelope {
-  return signAttestation(document, attesterSecret);
+  return signAttestation(document, attesterSecret, { domain: COMPUTATION_ATTESTATION_DOMAIN });
 }
 
 /**
@@ -123,7 +131,12 @@ export function verifyComputationAttestation(
   envelope: ComputationAttestationEnvelope,
   options: VerifyComputationAttestationOptions,
 ): VerifyComputationAttestationResult {
-  const signatureVerdict = verifyAttestation(envelope);
+  // Expiry is checked below, after the declared-source and window checks, so
+  // that the first failure reported keeps the order documented above.
+  const signatureVerdict = verifyAttestation(envelope, {
+    domain: COMPUTATION_ATTESTATION_DOMAIN,
+    checkExpiry: false,
+  });
   if (signatureVerdict.status === "invalid") {
     return { status: "invalid", reason: "bad-signature", detail: signatureVerdict.reason };
   }
@@ -152,15 +165,9 @@ export function verifyComputationAttestation(
     };
   }
 
-  if (envelope.payload.expiresAt !== undefined) {
-    const now = options.now ?? new Date();
-    if (new Date(envelope.payload.expiresAt).getTime() < now.getTime()) {
-      return {
-        status: "invalid",
-        reason: "expired",
-        detail: `attestation expired at ${envelope.payload.expiresAt}`,
-      };
-    }
+  const expiry = attestationExpiryProblem(envelope.payload, options.now);
+  if (expiry) {
+    return { status: "invalid", reason: "expired", detail: expiry.reason };
   }
 
   return { status: "valid" };

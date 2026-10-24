@@ -73,9 +73,11 @@ const resolver = new ChainedAbiRegistryClient([embeddedSpecReader, registryAttes
 
 An embedded-spec reader's `getSpec` must resolve to `null` for a contract with no embedded spec, not throw - `discoverContractSpec` itself throws `NoEmbeddedSpecError`, so any reader wrapping it for use in a chain is responsible for catching that and returning `null`.
 
-### `signAttestation` / `verifyAttestation`
+### Attestations
 
-An attestation (SEP §7.3) claims "this deployed contract emits this event schema." `signAttestation`/`verifyAttestation` are the signature envelope around that claim - who signed the document and whether it's been tampered with since. They don't validate the document's shape or its `events` payload; use `validateAttestationDocument` (or the JSON Schema at `schemas/attestation.schema.json`) for that separately.
+An attestation (SEP §5) claims "this deployed contract emits this event schema." The envelope proves who made the claim and that it hasn't been altered; the policy layer decides which claims to believe. The normative text is [`docs/sep/orbital-registry-sep.md`](../../docs/sep/orbital-registry-sep.md) §5.
+
+#### `signAttestation` / `verifyAttestation`
 
 ```ts
 import { signAttestation, verifyAttestation } from "@orbital-stellar/abi-registry";
@@ -90,23 +92,55 @@ const document: AttestationDocument = {
   ],
   attester: attesterKeypair.publicKey(), // G...
   createdAt: new Date().toISOString(),
+  expiresAt: "2027-01-01T00:00:00Z", // optional; recommended for third-party claims
 };
 
 const envelope = signAttestation(document, attesterKeypair.secret());
-// envelope: { payload, publicKey, signature }
+// envelope: { v: 1, payload, publicKey, signature }
 
 const verdict = verifyAttestation(envelope, { expectedWasmHash: onChainWasmHash });
-// { status: "valid" } | { status: "invalid", reason: string }
+// { status: "valid" } | { status: "invalid", code, reason }
 ```
 
-`signAttestation` signs `canonicalizeAttestation(document)` - a deterministic, recursively-key-sorted JSON serialization - with the attester's ed25519 keypair, and refuses to sign if `document.attester` doesn't match the signing key's own address.
+`signAttestation` signs the [SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md) digest of `domain + "\n" + canonicalizeAttestation(document)`: canonical JSON per [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785), prefixed with a domain (`orbital-attestation-v1` by default) so a signature made for one kind of document can't be replayed as another. A SEP-53-capable wallet can produce the same signature by signing `attestationSigningMessage(document)`. It refuses to sign if `document.attester` doesn't match the signing key's own address, or if the document can't be canonicalized (`NaN`, lone surrogates, …).
 
-`verifyAttestation` checks, in order, short-circuiting on the first failure:
+`verifyAttestation` checks, in order, short-circuiting on the first failure. Each failure carries a stable `code`:
 
-1. `envelope.publicKey` is a well-formed Stellar account address (`G...`).
-2. `envelope.publicKey` matches `envelope.payload.attester` - nobody but the claimed attester can produce a valid envelope for a given document.
-3. `envelope.signature` is a valid ed25519 signature by `envelope.publicKey` over the payload's canonical JSON - this is what catches tampering, since changing even one byte of the payload changes its canonical serialization.
-4. If `options.expectedWasmHash` is given (the caller's own on-chain lookup - this module makes no network calls): `envelope.payload.executableKind` must be `"wasm"` (a Stellar Asset Contract has no WASM hash to check against), and it must match `envelope.payload.wasmHash`.
+1. `envelope.v` is `1` (`unsupported-version`). Envelopes signed before version 1 do not verify.
+2. `envelope.publicKey` is a well-formed Stellar account address (`bad-public-key`).
+3. `envelope.publicKey` matches `envelope.payload.attester` (`attester-mismatch`).
+4. `envelope.signature` is a valid ed25519 signature over the digest for the expected `domain` (`bad-signature`). This is what catches tampering.
+5. `payload.expiresAt`, if set, is a timestamp with an offset and hasn't passed as of `options.now` (`malformed-expiry`, `expired`). Turn off with `checkExpiry: false`.
+6. If `options.expectedWasmHash` is given (the caller's own on-chain lookup - this module makes no network calls): `executableKind` must be `"wasm"` (`not-a-wasm-attestation`) and `wasmHash` must match (`wasm-hash-mismatch`).
+
+#### `resolveAttestations`
+
+A valid signature says who spoke, not whether they may speak for the contract. `resolveAttestations` applies the rest of the policy to a contract's attestations:
+
+```ts
+import { resolveAttestations } from "@orbital-stellar/abi-registry";
+
+const result = resolveAttestations(envelopes, {
+  contractId,
+  deployer, // G... of the account that created the contract, or null if unknown
+  expectedWasmHash,
+  minimumTrust: "deployer", // "deployer" | "third-party" | "unbound" (default)
+});
+
+result.preferred; // best live attestation, or undefined
+result.effective; // live attestations, best first
+result.superseded; // retired by a later one from the same attester
+result.rejected; // { envelope, code, reason } for everything dropped
+result.conflicting; // live attestations disagree about the events
+```
+
+- **Trust tier.** `deployer` when the attester created the contract, `third-party` when the deployer is known and is someone else, `unbound` when the deployer isn't known. Never guess the deployer: pass `null` and the tier is `unbound`. `resolveAttestationsWithDeployer` takes an async lookup instead of a value, and treats a failing lookup as unknown.
+- **Supersession.** `supersedes` holds `attestationHash(previous.payload)`. It only retires an attestation from the **same** attester - otherwise anyone could withdraw anyone's claim.
+- **Ranking.** Higher tier first, then more recent, then by hash. Disagreeing events are flagged in `conflicting`, never silently resolved.
+
+#### Verifying outside TypeScript
+
+[`test-vectors/attestation-v1.json`](./test-vectors/attestation-v1.json) is a language-neutral conformance suite - canonicalization cases and signed envelopes with the verdict a verifier must reach. Reference verifiers live in [`verifiers/go`](./verifiers/go) and [`verifiers/rust`](./verifiers/rust); both run against it in CI. Regenerate the file with `pnpm exec tsx scripts/generate-attestation-vectors.ts`.
 
 ### `RegistryPublisher`
 

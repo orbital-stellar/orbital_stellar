@@ -311,6 +311,7 @@ export type {
   RegisterComputationTriggerResult,
 } from "./triggers/computationTrigger.js";
 export {
+  COMPUTATION_ATTESTATION_DOMAIN,
   signComputationAttestation,
   verifyComputationAttestation,
 } from "./triggers/attestation.js";

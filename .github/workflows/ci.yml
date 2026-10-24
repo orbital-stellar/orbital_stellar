@@ -278,6 +278,27 @@ jobs:
           UPSTASH_REDIS_REST_TOKEN: UPSTASH_CANARY_DO_NOT_SHIP_000000000000000000000000000
         run: node scripts/assert-no-secrets-in-bundle.mjs
 
+  # The attestation envelope is a wire format, so TypeScript is not allowed to
+  # be its only verifier. These run the Go and Rust reference verifiers against
+  # the same test-vectors/attestation-v1.json that the TypeScript suite checks
+  # is up to date. GitHub-hosted Ubuntu runners ship both toolchains.
+  attestation-verifiers:
+    needs: changes
+    if: ${{ needs.changes.outputs.packages == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Go verifier
+        working-directory: packages/abi-registry/verifiers/go
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+      - name: Rust verifier
+        working-directory: packages/abi-registry/verifiers/rust
+        run: cargo test --locked
+
   cli-smoke-test:
     needs: changes
     if: ${{ needs.changes.outputs.packages == 'true' }}

@@ -17,7 +17,11 @@ type (constrained to `{ attester: string }`), and
 property-1/2/3 checks from §2, plus expiry) on top of that generic envelope
 - one signing concept, not two, per the issue's own instruction. `§3`'s
 open question of whether the envelope should move to `pulse-core` is not
-resolved here; it stays in `abi-registry` for now. `computationTrigger.ts`
+resolved here; it stays in `abi-registry` for now. Envelope version 1
+adds a signing *domain*: computation attestations are signed under
+`orbital-computation-attestation-v1` (`COMPUTATION_ATTESTATION_DOMAIN`), so
+they cannot be replayed as contract event-schema attestations or the reverse
+(SEP draft §5.4). `computationTrigger.ts`
 implements `ComputationTriggerPlanner` (§5's `fired`/`late`/`missed`/
 `unverifiable` mapping, `registerComputationTrigger`'s §8 gates) and
 `WorkerVerificationEngine.verifyComputationTrigger` (issue #1049) wires it
@@ -109,7 +113,7 @@ only field it requires:
 interface SignedEnvelope<TPayload extends { attester: string }> {
   payload: TPayload;
   publicKey: string;   // G…
-  signature: string;   // base64 ed25519 over canonicalize(payload)
+  signature: string;   // base64 ed25519 over the SEP-53 digest of domain + canonicalize(payload)
 }
 ```
 
