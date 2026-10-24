@@ -1,13 +1,13 @@
 # Orbital: Progress & Status Report
 
-**Last Updated:** 2026-07-16
+**Last Updated:** 2026-10-25
 **Project Status:** Core SDK family - Shipped ✅
 
 ---
 
 ## Status
 
-Orbital is **the typed event layer for Stellar** - four MIT-licensed packages on npm that give any Stellar developer typed event subscriptions (Horizon and Soroban), signed webhook delivery with durable retry, typed ABI decoding, and React hooks, without re-implementing the plumbing.
+Orbital is **the typed event layer for Stellar** - seven MIT-licensed packages (`0.2.0`) that give any Stellar developer typed event subscriptions (Horizon and Soroban), signed webhook delivery with durable retry, typed ABI decoding with signed interface attestations, anchor (SEP-12/24/31) clients, an auto-publish indexer, the worker definition model, and React hooks, without re-implementing the plumbing.
 
 For phase-by-phase status and release gates, see [`ROADMAP.md`](ROADMAP.md)'s [at-a-glance table](ROADMAP.md#at-a-glance). Short version: Phase 0 (Foundation) shipped 2026-05-29; Phase 1 (Production SDK) is in progress - `STABILITY.md` has merged, starter boilerplates and the `v1.0.0` tag are the only items left; Phase 2 (The Decoding Standard) and Phase 3 (Anchor Events) are next. What's explicitly out of scope while those phases are open - and why - lives in ROADMAP.md's [Frozen section](ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven).
 
@@ -23,7 +23,10 @@ orbital_stellar/
 │   ├── pulse-core/        # Event engine - Horizon + Soroban subscription, cursor persistence
 │   ├── pulse-webhooks/    # HMAC webhook delivery + verification, durable retry queues
 │   ├── pulse-notify/      # React hooks
-│   └── abi-registry/      # Soroban ABI client, schema helpers, registry publisher
+│   ├── abi-registry/      # Soroban ABI client, schema helpers, registry publisher, signed attestations
+│   ├── orbital-indexer/   # Auto-publish indexer: WASM auto-discovery -> on-chain registry
+│   ├── anchor-sdk/        # SEP-1 / SEP-10 / SEP-12 / SEP-24 / SEP-31 clients
+│   └── worker-core/       # Worker definition model: triggers, schedules, guard rails (no custody)
 ├── apps/
 │   └── web/               # Marketing + docs site + sandboxed demo API routes (Vercel)
 ├── docs/
@@ -70,7 +73,33 @@ Canonical client for fetching Soroban contract ABI specs (`AbiRegistryClient` ov
 
 **Status:** Production-ready.
 
+Also ships the signed interface attestation envelope (v1: SEP-53 signing with domain separation, RFC 8785 canonical JSON, expiry and supersession enforcement, trust-tier resolution) with language-neutral conformance vectors and Go and Rust reference verifiers.
+
 See [`packages/abi-registry/README.md`](./packages/abi-registry/README.md).
+
+### 5. `@orbital-stellar/orbital-indexer` - Auto-publish Indexer
+
+Discovers the interface of unknown contracts via WASM auto-discovery and publishes it to the on-chain ABI registry as part of normal engine operation.
+
+**Status:** Shipped (`0.2.0`).
+
+See [`packages/orbital-indexer/README.md`](./packages/orbital-indexer/README.md).
+
+### 6. `@orbital-stellar/anchor-sdk` - Anchor Clients
+
+Typed clients for SEP-1 discovery, SEP-10 auth, SEP-12 KYC, SEP-24 and SEP-31, with anchor lifecycle events normalized into the standard taxonomy.
+
+**Status:** Shipped (`0.2.0`).
+
+See [`packages/anchor-sdk/README.md`](./packages/anchor-sdk/README.md).
+
+### 7. `@orbital-stellar/worker-core` - Worker Definition Model
+
+What a worker is, before anything runs one: triggers, schedules, subscriptions and guard rails, with a hard no-custody constraint.
+
+**Status:** Shipped (`0.2.0`).
+
+See [`packages/worker-core/README.md`](./packages/worker-core/README.md).
 
 ---
 
@@ -159,7 +188,7 @@ Production hosting - multi-region orchestration, persistent registries, leader e
 
 ### As a Contributor
 1. Read [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-2. Browse [issues tagged `good-first-issue`](https://github.com/determined-001/orbital_stellar/labels/good-first-issue) - Drips Wave Program rewards apply
+2. Browse [issues tagged `good-first-issue`](https://github.com/orbital-stellar/orbital_stellar/labels/good-first-issue) - Drips Wave Program rewards apply
 3. Run `pnpm -r typecheck && pnpm test` before submitting
 
 ### As a Funder / Reviewer

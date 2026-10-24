@@ -40,9 +40,9 @@ recommended (an operator with no offering has nothing to subscribe to).
 4. Fill in `terms` as structured data (price, denomination, daily cap, SLA),
    not prose.
 5. Add the record as a new JSON file conforming to `operator.schema.json`.
-   Real production records live under `data/operators/`; illustrative
-   examples for docs live under
-   [`packages/abi-registry/schema/examples/operators/`](../../packages/abi-registry/schema/examples/operators/).
+   Real production records live under `data/operators/<operatorId>/`
+   (created by the first accepted submission); the worked example below is
+   illustrative.
 
 ### Worked example: an operator record
 

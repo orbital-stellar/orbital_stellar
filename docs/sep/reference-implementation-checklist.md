@@ -1,6 +1,6 @@
 # Reference Implementation Checklist
 
-This checklist maps every normative clause in `orbital-registry-sep.md` to its implementation in the `determined-001/orbital_stellar` repository.
+This checklist maps every normative clause in `orbital-registry-sep.md` to its implementation in the `orbital-stellar/orbital_stellar` repository.
 
 | Clause | Implementation Status | File Paths |
 |--------|----------------------|------------|

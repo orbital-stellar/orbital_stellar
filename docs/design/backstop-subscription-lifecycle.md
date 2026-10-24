@@ -1,13 +1,13 @@
 # Backstop subscription lifecycle and billing hooks
 
 **Status: implemented.** `packages/worker-core` landed with 18.3
-([#1038](https://github.com/determined-001/orbital_stellar/issues/1038)), which
+([#1038](https://github.com/orbital-stellar/orbital_stellar/issues/1038)), which
 was the blocker: this design was written while the package had no tracked files.
 The lifecycle, the coverage ledger and the billing hooks now ship in
 `packages/worker-core/src/subscription/`.
 
-21.5 ([#1066](https://github.com/determined-001/orbital_stellar/issues/1066)) has
-merged. 21.3 ([#1064](https://github.com/determined-001/orbital_stellar/issues/1064))
+21.5 ([#1066](https://github.com/orbital-stellar/orbital_stellar/issues/1066)) has
+merged. 21.3 ([#1064](https://github.com/orbital-stellar/orbital_stellar/issues/1064))
 is still open, which is why `tier` is typed `string` rather than a union — see
 [What is still open](#what-is-still-open).
 

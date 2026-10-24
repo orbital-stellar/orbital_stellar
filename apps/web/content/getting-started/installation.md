@@ -24,11 +24,20 @@ pnpm add @orbital-stellar/pulse-notify react
 
 # ABI Registry client for Soroban event decoding (optional)
 pnpm add @orbital-stellar/abi-registry
+
+# Anchor clients - SEP-1, SEP-10, SEP-12, SEP-24, SEP-31 (optional)
+pnpm add @orbital-stellar/anchor-sdk
+
+# Auto-publish indexer for the on-chain registry (optional)
+pnpm add @orbital-stellar/orbital-indexer
+
+# Worker definition model (optional)
+pnpm add @orbital-stellar/worker-core
 ```
 
 ## TypeScript
 
-All four packages ship with full TypeScript types. No `@types/*` packages are needed.
+Every package ships with full TypeScript types. No `@types/*` packages are needed.
 
 ```json
 {
@@ -58,7 +67,7 @@ Pick the one that matches your runtime. The signing side (`WebhookDelivery`) req
 Want to see the SDKs composed end-to-end before building your own backend? Clone the repo and run the marketing site - it ships a sandboxed Next.js route handler that subscribes to a Stellar address and streams events as SSE:
 
 ```bash
-git clone https://github.com/determined-001/orbital_stellar.git
+git clone https://github.com/orbital-stellar/orbital_stellar.git
 cd orbital_stellar
 pnpm install
 NEXT_PUBLIC_NETWORK=testnet pnpm --filter orbital/web dev

@@ -77,9 +77,9 @@ Evidence:
 
 - Counterparty: **Aether Settlement** (a registered Stellar anchor / settlement
   desk). Named in the #1036 unfreeze rationale ([`CHANGELOG.md` dated
-  2026-08-30](../../CHANGELOG.md)) as the counterparty that motivated the
+  2026-08-30](../CHANGELOG.md)) as the counterparty that motivated the
   unfreeze, and wired to worker gate `W3` in
-  [`ROADMAP.md` Phase 4](../../ROADMAP.md#phase-4--workers-entry-gate).
+  [`ROADMAP.md` Phase 4](../ROADMAP.md#phase-4--workers-entry-gate).
 - This is the **binding constraint on the entire roadmap (§D.2)**: it cannot be
   delegated, and no amount of code substitutes for it.
 - **Sub-gate status: NOT MET.** The actual `W3` sign-off — Aether Settlement

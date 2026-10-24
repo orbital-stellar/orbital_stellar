@@ -194,9 +194,9 @@ If ABI registry lookup or decoding fails:
 Consumers can narrow contract events using TypeScript guards:
 
 ```typescript
-import type { events } from "@orbital-stellar/pulse-core";
+import type { ContractEmittedEvent } from "@orbital-stellar/pulse-core";
 
-function handleContractEvent(e: events.ContractEmittedEvent) {
+function handleContractEvent(e: ContractEmittedEvent) {
   if (e.topics[0] === "transfer") {
     // Handle transfer
     const tx = e.decodedData as TransferMetadata;
@@ -266,4 +266,4 @@ CAP-67 events map primarily to `ContractEvent` (specifically
 
 - [CAP-67: Soroban-native Asset Contract](https://github.com/stellar/core/pull/3801)
 - [SEP-0041: Soroban Asset Contract](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0067.md)
-- [pulse-core API Documentation](./packages/pulse-core/README.md)
+- [pulse-core API Documentation](../packages/pulse-core/README.md)

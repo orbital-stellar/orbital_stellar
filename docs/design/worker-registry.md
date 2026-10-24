@@ -1,6 +1,6 @@
 # Worker Registry Data Model
 
-> **Status:** Accepted · **Issue:** [#1055](https://github.com/determined-001/orbital_stellar/issues/1055) · **Milestone:** Phase 4 - Workers W2: external operators
+> **Status:** Accepted · **Issue:** [#1055](https://github.com/orbital-stellar/orbital_stellar/issues/1055) · **Milestone:** Phase 4 - Workers W2: external operators
 
 ## Summary
 

@@ -1,10 +1,10 @@
 # Orbital
 
 [![npm](https://img.shields.io/npm/v/@orbital-stellar/pulse-core?style=flat-square&logo=npm&label=pulse-core)](https://www.npmjs.com/package/@orbital-stellar/pulse-core)
-[![License: MIT](https://img.shields.io/github/license/determined-001/orbital_stellar?style=flat-square)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/determined-001/orbital_stellar/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/determined-001/orbital_stellar/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-≥67%25-brightgreen?style=flat-square)](https://github.com/determined-001/orbital_stellar/actions/workflows/ci.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/determined-001/orbital_stellar/codeql.yml?branch=main&style=flat-square&label=codeql)](https://github.com/determined-001/orbital_stellar/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/github/license/orbital-stellar/orbital_stellar?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/orbital-stellar/orbital_stellar/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/orbital-stellar/orbital_stellar/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-≥67%25-brightgreen?style=flat-square)](https://github.com/orbital-stellar/orbital_stellar/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/orbital-stellar/orbital_stellar/codeql.yml?branch=main&style=flat-square&label=codeql)](https://github.com/orbital-stellar/orbital_stellar/actions/workflows/codeql.yml)
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178c6?style=flat-square&logo=typescript)](tsconfig.base.json)
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022-339933?style=flat-square&logo=node.js)](.github/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?style=flat-square&logo=conventionalcommits)](https://www.conventionalcommits.org)
@@ -63,7 +63,7 @@ Four different states get conflated in most project READMEs. They are separated 
 | Reconnection, rate-limit backoff, cursor persistence | ✅ `0.2.0` | ✅ | |
 | HMAC webhook delivery + verification | ✅ `0.2.0` | ✅ | Durable retry queues (memory, Redis, Postgres) and signing/verification exports |
 | React hooks | ✅ `0.2.0` | ✅ | 4.6 kB gzip |
-| **Soroban contract-event subscription** | ✅ `0.2.0` | ✅ | `CoreConfig.soroban.rpcUrl` configures the Soroban RPC endpoint. [#1132](https://github.com/determined-001/orbital_stellar/issues/1132) is closed |
+| **Soroban contract-event subscription** | ✅ `0.2.0` | ✅ | `CoreConfig.soroban.rpcUrl` configures the Soroban RPC endpoint. [#1132](https://github.com/orbital-stellar/orbital_stellar/issues/1132) is closed |
 | ABI registry client + WASM auto-discovery | ✅ `0.2.0` | ✅ | `discoverContractSpec()`, `createDefaultAbiRegistryClient()`, the `abi-registry verify` CLI, and bundled USDC / EURC / AQUA / native-asset specs |
 | Auto-publish indexer (`orbital-indexer`) | ✅ `0.2.0` (first publish) | ✅ | Discovers specs for unregistered contracts from their WASM and publishes them on-chain |
 | Anchor clients (`anchor-sdk`) | ✅ `0.2.0` (first publish) | ✅ | SEP-1, SEP-10, SEP-12, SEP-24 and SEP-31. Never holds a secret key |
@@ -128,7 +128,7 @@ pnpm add @orbital-stellar/worker-core            # if you run workers
 Or clone the repo to work from source:
 
 ```bash
-git clone https://github.com/determined-001/orbital_stellar.git
+git clone https://github.com/orbital-stellar/orbital_stellar.git
 cd orbital_stellar
 pnpm install
 ```
@@ -280,7 +280,7 @@ Full multi-year plan, plus what's explicitly frozen out of scope, in [`ROADMAP.m
 Contributions are welcome from the Stellar community. Start here:
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev loop, coding standards, and PR process.
-- Browse [issues tagged `good-first-issue`](https://github.com/determined-001/orbital_stellar/labels/good-first-issue) - scoped, unblocked, reviewer-ready.
+- Browse [issues tagged `good-first-issue`](https://github.com/orbital-stellar/orbital_stellar/labels/good-first-issue) - scoped, unblocked, reviewer-ready.
 - Stellar Wave Program issues are tagged `wave-program` and pay per-merge per complexity points.
 - Run the test suite before submitting: `pnpm -r typecheck && pnpm test`.
 
@@ -298,11 +298,11 @@ Thanks to everyone who has shipped code, docs, or feedback for Orbital. The list
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/determined-001"><img src="https://github.com/determined-001.png?size=100" width="100px;" alt="determined-001"/><br /><sub><b>determined-001</b></sub></a><br /><a href="https://github.com/determined-001/orbital_stellar/commits?author=determined-001" title="Code">💻</a> <a href="https://github.com/determined-001/orbital_stellar/commits?author=determined-001" title="Documentation">📖</a> <a href="#infra-determined-001" title="Infrastructure">🏗️</a> <a href="#maintenance-determined-001" title="Maintenance">🚧</a> <a href="#projectManagement-determined-001" title="Project Management">📆</a> <a href="https://github.com/determined-001/orbital_stellar/pulls?q=is%3Apr+reviewed-by%3Adetermined-001" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/determined-001/orbital_stellar/commits?author=determined-001" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Trovicdev"><img src="https://github.com/Trovicdev.png?size=100" width="100px;" alt="Trovicdev"/><br /><sub><b>Trovicdev</b></sub></a><br /><a href="https://github.com/determined-001/orbital_stellar/commits?author=Trovicdev" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Praxhant97"><img src="https://github.com/Praxhant97.png?size=100" width="100px;" alt="Praxhant97"/><br /><sub><b>Praxhant97</b></sub></a><br /><a href="https://github.com/determined-001/orbital_stellar/commits?author=Praxhant97" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Chrisbankz0"><img src="https://github.com/Chrisbankz0.png?size=100" width="100px;" alt="Christopher Umechukwu"/><br /><sub><b>Christopher Umechukwu</b></sub></a><br /><a href="https://github.com/determined-001/orbital_stellar/commits?author=Chrisbankz0" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/3m1n3nc3"><img src="https://github.com/3m1n3nc3.png?size=100" width="100px;" alt="Legacy"/><br /><sub><b>Legacy</b></sub></a><br /><a href="https://github.com/determined-001/orbital_stellar/commits?author=3m1n3nc3" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/determined-001"><img src="https://github.com/determined-001.png?size=100" width="100px;" alt="determined-001"/><br /><sub><b>determined-001</b></sub></a><br /><a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=determined-001" title="Code">💻</a> <a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=determined-001" title="Documentation">📖</a> <a href="#infra-determined-001" title="Infrastructure">🏗️</a> <a href="#maintenance-determined-001" title="Maintenance">🚧</a> <a href="#projectManagement-determined-001" title="Project Management">📆</a> <a href="https://github.com/orbital-stellar/orbital_stellar/pulls?q=is%3Apr+reviewed-by%3Adetermined-001" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=determined-001" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Trovicdev"><img src="https://github.com/Trovicdev.png?size=100" width="100px;" alt="Trovicdev"/><br /><sub><b>Trovicdev</b></sub></a><br /><a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=Trovicdev" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Praxhant97"><img src="https://github.com/Praxhant97.png?size=100" width="100px;" alt="Praxhant97"/><br /><sub><b>Praxhant97</b></sub></a><br /><a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=Praxhant97" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Chrisbankz0"><img src="https://github.com/Chrisbankz0.png?size=100" width="100px;" alt="Christopher Umechukwu"/><br /><sub><b>Christopher Umechukwu</b></sub></a><br /><a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=Chrisbankz0" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/3m1n3nc3"><img src="https://github.com/3m1n3nc3.png?size=100" width="100px;" alt="Legacy"/><br /><sub><b>Legacy</b></sub></a><br /><a href="https://github.com/orbital-stellar/orbital_stellar/commits?author=3m1n3nc3" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
@@ -312,7 +312,7 @@ Thanks to everyone who has shipped code, docs, or feedback for Orbital. The list
 
 Emoji key follows the [all-contributors](https://allcontributors.org/docs/en/emoji-key) spec - 💻 code · 📖 docs · 🎨 design · 🏗️ infrastructure · 🚧 maintenance · 📆 project management · 👀 reviewed PRs · ⚠️ tests.
 
-The list above is the curated **all-contributors** set. For the full commit history including every contributor not yet recognized here, see [GitHub's contributor graph](https://github.com/determined-001/orbital_stellar/graphs/contributors) - if your name is there and not in the table, please [open an issue](https://github.com/determined-001/orbital_stellar/issues/new) or comment `@all-contributors please add @your-username for code` on any issue and the bot will add you.
+The list above is the curated **all-contributors** set. For the full commit history including every contributor not yet recognized here, see [GitHub's contributor graph](https://github.com/orbital-stellar/orbital_stellar/graphs/contributors) - if your name is there and not in the table, please [open an issue](https://github.com/orbital-stellar/orbital_stellar/issues/new) or comment `@all-contributors please add @your-username for code` on any issue and the bot will add you.
 
 ---
 
@@ -324,6 +324,6 @@ The list above is the curated **all-contributors** set. For the full commit hist
 
 ## Community
 
-- [GitHub Discussions](https://github.com/determined-001/orbital_stellar/discussions) - questions, ideas, design discussion, and help.
+- [GitHub Discussions](https://github.com/orbital-stellar/orbital_stellar/discussions) - questions, ideas, design discussion, and help.
 - Twitter: _(handle pending)_
 - Discord: _(invite pending)_

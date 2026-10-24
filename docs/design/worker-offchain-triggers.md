@@ -91,8 +91,8 @@ signature model fits rather than introducing a second attestation concept."*
 
 | Piece | Fits? | Why |
 | ----- | ----- | --- |
-| `AttestationEnvelope` — `{ payload, publicKey, signature }` | **Yes** | Exactly properties 1 and 4: a self-contained ed25519 proof of who signed what, verifiable offline. |
-| `canonicalizeAttestation` — recursively key-sorted JSON | **Yes** | *"a verifier must be able to re-derive the exact bytes that were signed"* — the same requirement, for the same reason. |
+| `AttestationEnvelope` — `{ v, payload, publicKey, signature }` | **Yes** | Exactly properties 1 and 4: a self-contained ed25519 proof of who signed what, verifiable offline. |
+| `canonicalizeAttestation` — RFC 8785 canonical JSON | **Yes** | *"a verifier must be able to re-derive the exact bytes that were signed"* — the same requirement, for the same reason. |
 | `verifyAttestation` rules 1–3 | **Yes** | Well-formed `G…` address, envelope signer matches `payload.attester`, valid signature over the canonical bytes. |
 | `AttestationDocument` | **No** | It attests *"here is the event schema this deployed contract emits"*: `contractId`, `executableKind`, `wasmHash`, `events: EventSpec[]`. None of it describes an oracle result. |
 | `verifyAttestation` rule 4 (`expectedWasmHash`) | **No** | Contract-specific by construction. |
@@ -111,6 +111,7 @@ only field it requires:
 
 ```ts
 interface SignedEnvelope<TPayload extends { attester: string }> {
+  v: 1;
   payload: TPayload;
   publicKey: string;   // G…
   signature: string;   // base64 ed25519 over the SEP-53 digest of domain + canonicalize(payload)
@@ -119,8 +120,8 @@ interface SignedEnvelope<TPayload extends { attester: string }> {
 
 `signAttestation` / `verifyAttestation` keep their current signatures as the
 ABI-specific specialisation, with the `expectedWasmHash` check layered on top as
-it is today. Nothing about the existing API changes for existing callers, and
-20.7 gets one attestation concept rather than a second.
+it is today. Envelope v1 added the `v` field and the signing domain; callers that
+do not pass a domain get the default. 20.7 gets one attestation concept rather than a second.
 
 **Where it lives.** `abi-registry` is the wrong home for a generic signing
 envelope once a second consumer exists, and `worker-core` importing

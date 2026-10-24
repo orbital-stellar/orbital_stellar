@@ -28,7 +28,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 ## Setting up the repo
 
 ```bash
-git clone https://github.com/determined-001/orbital_stellar.git
+git clone https://github.com/orbital-stellar/orbital_stellar.git
 cd orbital_stellar
 pnpm install
 ```
@@ -213,7 +213,7 @@ Two places, and both are needed:
 2. `paths:` in `.github/workflows/custody-gate.yml`
 
 Miss the second and the gate simply never runs on that path — the exact failure
-[#1026](https://github.com/determined-001/orbital_stellar/issues/1026) records
+[#1026](https://github.com/orbital-stellar/orbital_stellar/issues/1026) records
 for `contracts/`, `data/` and `scripts/` in `ci.yml`.
 
 ---
@@ -280,6 +280,6 @@ Edit `.all-contributorsrc`, add an entry under `"contributors"` with your GitHub
 
 ### What the table represents
 
-The curated table in the README is the **all-contributors** set - explicitly recognized contributions across every category. It is not the same as the full git author list. For the complete commit history including everyone who has ever pushed code, see the [GitHub contributor graph](https://github.com/determined-001/orbital_stellar/graphs/contributors).
+The curated table in the README is the **all-contributors** set - explicitly recognized contributions across every category. It is not the same as the full git author list. For the complete commit history including everyone who has ever pushed code, see the [GitHub contributor graph](https://github.com/orbital-stellar/orbital_stellar/graphs/contributors).
 
 If you contributed before all-contributors was adopted (`v0.1.0` release timeframe) and your name is in the git history but not the table, please open an issue or comment on a PR with your preferred GitHub login - we will add you.

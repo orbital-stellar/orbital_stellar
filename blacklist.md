@@ -34,14 +34,14 @@ without permission.
 
 | PR | Opened by | Commit author | Linked issue | Outcome |
 |----|-----------|---------------|--------------|---------|
-| [#934](https://github.com/determined-001/orbital_stellar/pull/934) | `neyij` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#931](https://github.com/determined-001/orbital_stellar/issues/931) | Closed unmerged. Work was sound and was reapplied to `main` directly; issue closed. |
-| [#945](https://github.com/determined-001/orbital_stellar/pull/945) | `probablyABug` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#922](https://github.com/determined-001/orbital_stellar/issues/922) | Closed unmerged. Work did not satisfy the issue; issue remains open. |
-| [#946](https://github.com/determined-001/orbital_stellar/pull/946) | `probablyABug` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#918](https://github.com/determined-001/orbital_stellar/issues/918) | Closed unmerged. Work did not satisfy the issue; issue remains open. |
+| [#934](https://github.com/orbital-stellar/orbital_stellar/pull/934) | `neyij` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#931](https://github.com/orbital-stellar/orbital_stellar/issues/931) | Closed unmerged. Work was sound and was reapplied to `main` directly; issue closed. |
+| [#945](https://github.com/orbital-stellar/orbital_stellar/pull/945) | `probablyABug` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#922](https://github.com/orbital-stellar/orbital_stellar/issues/922) | Closed unmerged. Work did not satisfy the issue; issue remains open. |
+| [#946](https://github.com/orbital-stellar/orbital_stellar/pull/946) | `probablyABug` | `Stephan-Thomas <xevermontes8@gmail.com>` | [#918](https://github.com/orbital-stellar/orbital_stellar/issues/918) | Closed unmerged. Work did not satisfy the issue; issue remains open. |
 
 Accounts involved: `neyij`, `probablyABug`, and the commit-author identity
 `Stephan-Thomas <xevermontes8@gmail.com>`.
 
-Note on [#939](https://github.com/determined-001/orbital_stellar/pull/939):
+Note on [#939](https://github.com/orbital-stellar/orbital_stellar/pull/939):
 opened by `Stephan-Thomas` with commits authored by the same identity.
 Authorship is self-consistent there, so it is **not** a violation and was
 reviewed on its technical merits like any other pull request.

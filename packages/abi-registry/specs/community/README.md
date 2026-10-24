@@ -15,7 +15,7 @@ specs/community/
   <contractId>.verdict.json  # `abi-registry verify --json` output for it
 ```
 
-- `<contractId>.json` is the canonical [`ContractSpec`](../src/spec.ts)
+- `<contractId>.json` is the canonical [`ContractSpec`](../../src/spec.ts)
   exactly as it will be published: `version`, `name`, `contractId`,
   `functions`, `events`, `types`, `pointer`. The on-chain hash covers the
   whole canonical spec, pointer included, and resolvers re-hash whatever the

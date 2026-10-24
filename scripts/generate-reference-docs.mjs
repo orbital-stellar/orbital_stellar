@@ -24,7 +24,7 @@ try {
 }
 const outRoot = "apps/web/content/reference";
 const sourceLinkTemplate =
-  "https://github.com/determined-001/orbital_stellar/blob/{gitRevision}/{path}#L{line}";
+  "https://github.com/orbital-stellar/orbital_stellar/blob/{gitRevision}/{path}#L{line}";
 
 const packages = [
   {

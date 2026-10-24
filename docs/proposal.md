@@ -2,7 +2,7 @@
 
 **Proposal Track:** SCF Infrastructure Grant (Build Award)
 **Status:** Phase 0 shipped (`v0.1.0`) · Phase 1's Soroban subscription, ABI registry client, and cursor persistence have since shipped too · Requesting funding for the remaining Phase 1 milestones (discriminated union refinement, starter boilerplates, `v1.0` stability pledge)
-**Repository:** https://github.com/determined-001/orbital_stellar
+**Repository:** https://github.com/orbital-stellar/orbital_stellar
 **License:** MIT
 **Last updated:** 2026-07-06
 
@@ -233,7 +233,7 @@ Contact, repository links, and license are at the top of this document.
 
 ## References
 
-1. Orbital repository - [`github.com/determined-001/orbital_stellar`](https://github.com/determined-001/orbital_stellar)
+1. Orbital repository - [`github.com/orbital-stellar/orbital_stellar`](https://github.com/orbital-stellar/orbital_stellar)
 2. `v0.1.0` release notes - [`CHANGELOG.md`](../CHANGELOG.md)
 3. Architecture reference - [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md)
 4. Phase 0 completion snapshot - [`PROGRESS.md`](../PROGRESS.md)

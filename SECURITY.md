@@ -38,7 +38,7 @@ Pre-release tags (`-alpha`, `-beta`, `-rc`) receive fixes only for critical vuln
 
 Use GitHub's private advisory system:
 
-1. Go to the [**Security** tab](https://github.com/determined-001/orbital_stellar/security) of this repository.
+1. Go to the [**Security** tab](https://github.com/orbital-stellar/orbital_stellar/security) of this repository.
 2. Click **Report a vulnerability**.
 3. Fill in: what you found, how to reproduce, the impact, and any suggested fix.
 

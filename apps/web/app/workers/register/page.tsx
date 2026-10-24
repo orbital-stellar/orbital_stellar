@@ -5,7 +5,7 @@ import Link from "next/link";
 // see the rationale in docs/workers/submitting.md.
 export const dynamic = "force-static";
 
-const REPO = "https://github.com/determined-001/orbital_stellar";
+const REPO = "https://github.com/orbital-stellar/orbital_stellar";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (

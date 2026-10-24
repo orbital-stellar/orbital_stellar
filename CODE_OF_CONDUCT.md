@@ -44,7 +44,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported privately to the project maintainers. To keep reports confidential,
 **do not open a public GitHub issue.** Instead, use GitHub's private reporting:
 
-1. Go to the [**Security** tab](https://github.com/determined-001/orbital_stellar/security) of this repository.
+1. Go to the [**Security** tab](https://github.com/orbital-stellar/orbital_stellar/security) of this repository.
 2. Click **Report a vulnerability** and describe the incident (this channel is
    monitored by the maintainers and keeps the report private).
 

@@ -1,13 +1,13 @@
 # Backstop readiness cost model
 
 **Status: implemented, except the numbers.** `packages/worker-core` landed with
-18.3 ([#1038](https://github.com/determined-001/orbital_stellar/issues/1038)),
+18.3 ([#1038](https://github.com/orbital-stellar/orbital_stellar/issues/1038)),
 which was one of the two blockers; the meter, the aggregation and the export
 surfaces now ship in `packages/worker-core/src/backstop/costMeter.ts` and
 `packages/worker-core/src/metrics.ts`.
 
 The other blocker stands. 21.1
-([#1062](https://github.com/determined-001/orbital_stellar/issues/1062)) is still
+([#1062](https://github.com/orbital-stellar/orbital_stellar/issues/1062)) is still
 open, so no backstop watcher has run and **[the numbers table](#the-measured-numbers)
 is still empty on purpose.** §C.7's whole point is that readiness cost must be
 measured rather than assumed; filling that table with plausible estimates would

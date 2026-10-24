@@ -314,8 +314,8 @@ hard constraint. No stage shipped partial.
 
 This is quoted verbatim from `ORBITAL_PRD.md` §C.2 and is the immutable design
 rule for the whole layer. It is cross-linked to
-[`ORBITAL_PRD.md` §C.9](./ORBITAL_PRD.md#c9) — the gate definition — so the gate
-survives even if the PRD doc itself goes stale. The gate's text is replicated
+`ORBITAL_PRD.md` §C.9 (the gate definition; the PRD is not part of this repo), so the gate
+stays readable without it. The gate's text is replicated
 here on purpose rather than referenced only, because the PRD can drift.
 
 ### Build order is a hard constraint, not a suggestion
@@ -407,6 +407,6 @@ procedure.
 
 ## Contributing to the roadmap
 
-If you have a feature request or want to propose a change to the roadmap, open a [GitHub Discussion in the Ideas category](https://github.com/determined-001/orbital_stellar/discussions/categories/ideas). Roadmap items that attract significant community interest move up in priority.
+If you have a feature request or want to propose a change to the roadmap, open a [GitHub Discussion in the Ideas category](https://github.com/orbital-stellar/orbital_stellar/discussions/categories/ideas). Roadmap items that attract significant community interest move up in priority.
 
 Roadmap changes that **add scope** (new waves, new packages, new phase items) follow the normal PR flow. Roadmap changes that **remove or postpone shipped scope** require a maintainer sign-off and a note in [`CHANGELOG.md`](./CHANGELOG.md) under `### Changed`. Proposals targeting a [Frozen](#frozen--out-of-scope-until-the-core-thesis-is-proven) item will be closed with a pointer to this document.
