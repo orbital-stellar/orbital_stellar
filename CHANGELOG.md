@@ -57,77 +57,38 @@ below before this entry is considered complete:
 
 ## [Unreleased]
 
+`main` is ahead of the `0.2.0` npm release. Install from source to use these.
+
+### Breaking Changes
+
+- **`abi-registry`: attestation envelope version 1.** Attestations are now
+  signed over the SEP-53 digest of a domain-separated, RFC 8785 canonical
+  document and carry `v: 1`. Envelopes signed by `0.2.0` no longer verify
+  (`unsupported-version`) and must be re-signed. `verifyAttestation` now
+  enforces `expiresAt`. `worker-core` computation attestations move to their
+  own domain, `orbital-computation-attestation-v1`.
+
 ### Added
 
-- `STABILITY.md` - strict semver on the public API of all `@orbital-stellar/*`
-  packages, wire/data contracts covered (webhook headers, HMAC scheme, retry
-  semantics, `NormalizedEvent` JSON shape, cursor format, registry schema
-  format), a 6-month deprecation window, and a documented security exception.
-  Closes the outstanding Wave 1.5 release-gate item.
-- [`docs/migration/0.1-to-1.0.md`](docs/migration/0.1-to-1.0.md) - procedural
-  before/after migration guide for the `0.1.0` → `1.0.0` bump (breaking
-  `abiRegistry` default, `decodedData` shape, Wave 8 registry configuration).
-  Narrative release notes remain in this file’s `[1.0.0]` entry when cut;
-  do not duplicate them into the guide.
+- **`abi-registry`: attestation policy.** `resolveAttestations` ranks claims by
+  trust tier (`deployer` > `third-party` > `unbound`), follows `supersedes`
+  chains and flags conflicts. Ships with a JSON Schema for the envelope, a
+  language-neutral conformance suite and reference verifiers in Go and Rust.
+  The SEP draft's §5 specifies the envelope.
+- **`abi-registry`: mainnet-aware registry selection.**
+  `createDefaultAbiRegistryClient({ network })` picks the on-chain registry for
+  the network instead of always using testnet; the mainnet constants stay empty
+  until a mainnet deploy, and the mainnet link never falls back to testnet. See
+  [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md).
+- **29 verified mainnet schemas** in `packages/abi-registry/specs/community/`
+  (Blend, Soroswap, Phoenix, Aquarius, Reflector, DeFindex, FxDAO, Comet,
+  Allbridge, KALE, Slender, Orbit and more), each with a `match` verdict that
+  CI re-verifies against mainnet WASM on every change, and a publish path for
+  contributed specs.
+- `abi-registry`: `PrimitiveType` gained `"val"`; the empty tuple maps to
+  `void`.
 
-### Changed
-
-- **Roadmap refocused on the decoding standard.** Maintainer sign-off for
-  scope removal per `ROADMAP.md`'s own contribution rules. The former Phase 2
-  (SDK Ecosystem) is replaced by Phase 2 - The Decoding Standard (SEP draft,
-  `orbital codegen`, semantic layer, hosted registry). `@orbital-stellar/anchor-sdk`
-  is pulled forward into a new Phase 3 - Anchor Events. The former Phase 3
-  (Trust & Agent Layer: x402, agent-sdk, intent compiler, shadow-fork) and
-  Phase 4 (Protocol Permanence: identity layer, reactor library, 10+ SEPs)
-  are frozen and moved to an explicit Frozen section in `ROADMAP.md` with
-  per-item rationale and an unfreeze procedure. No shipped code is removed -
-  planned scope only.
-- Docs aligned with the refocused roadmap: README reframed around the
-  decoding standard; open-source-policy and proposal forward-references
-  updated; frozen-scope references removed from forward-looking docs.
-
-### Fixed
-
-### Security
-
-- **`@orbital-stellar/anchor-sdk` 0.1.0 does not validate SEP-10 challenges
-  before signing them.** `Sep10Client.authenticate()` passed the anchor's
-  challenge XDR straight to the caller-supplied `sign` callback with no checks:
-  no verification of the anchor's signature, no source-account or `sequence == 0`
-  check, no `<home_domain> auth` Manage Data check, no time bounds. The
-  `network_passphrase` in the response was parsed and then ignored, and
-  `SIGNING_KEY` — the one value that can attribute a challenge to an anchor —
-  was read from `stellar.toml` and never used.
-
-  A hostile or compromised anchor, or an on-path attacker against a plain-`http`
-  `WEB_AUTH_ENDPOINT`, could return an ordinary transaction (a payment, or a
-  `set_options` adding a signer) and have it blind-signed by the consumer's
-  wallet, hardware device, or KMS.
-
-  Fixed in **0.2.0**. `Sep10Client` now verifies every challenge with
-  `WebAuth.readChallengeTx` before `sign` is invoked, rejects a
-  `network_passphrase` that disagrees with the configured network, and refuses a
-  non-`https` endpoint at construction.
-
-  This is a **breaking change to a surface that was itself the vulnerability**,
-  taken under the security exception in [`STABILITY.md`](./STABILITY.md).
-  A GitHub Security Advisory is to be published per [`SECURITY.md`](./SECURITY.md).
-
-  **Migration.** `Sep10Client` now requires the anchor's identity. The smallest
-  change is to build it from the anchor's own `stellar.toml`:
-
-  ```ts
-  // before - no way to tell whose challenge you were signing
-  const client = new Sep10Client(toml.WEB_AUTH_ENDPOINT);
-
-  // after - SIGNING_KEY and NETWORK_PASSPHRASE come from the toml you already fetch
-  const toml = await discoverAnchor("anchor.example");
-  const client = Sep10Client.fromToml(toml, "anchor.example");
-  ```
-
-  Or pass them explicitly: `new Sep10Client(endpoint, { serverAccountId,
-  networkPassphrase, homeDomain, webAuthDomain })`. Anchors that publish no
-  `SIGNING_KEY` are now refused rather than trusted.
+Per-package detail: [`abi-registry`](./packages/abi-registry/CHANGELOG.md#unreleased).
 
 ---
 
@@ -148,8 +109,8 @@ the **first time** with this release; `pulse-core`, `pulse-webhooks`,
 - **`anchor-sdk`: `Sep10Client` now requires the anchor's identity.** It
   verifies every SEP-10 challenge before handing it to the signer. This is
   taken under the security exception in [`STABILITY.md`](./STABILITY.md); the
-  advisory and migration steps are in the Security entry under
-  [Unreleased](#unreleased) below. Because `anchor-sdk` has no earlier npm
+  advisory and migration steps are in the [Security](#security) entry
+  below. Because `anchor-sdk` has no earlier npm
   release, no published consumer is affected.
 
 ### Per package
@@ -191,6 +152,77 @@ the **first time** with this release; `pulse-core`, `pulse-webhooks`,
   and a subscription lifecycle; and price and slippage guard rails. The
   latency-tier stub and the copy-trade worker and vault were removed unbuilt
   (see [`docs/design/workers.md`](./docs/design/workers.md) section 6).
+
+
+### Added (repository)
+
+- `STABILITY.md` - strict semver on the public API of all `@orbital-stellar/*`
+  packages, wire/data contracts covered (webhook headers, HMAC scheme, retry
+  semantics, `NormalizedEvent` JSON shape, cursor format, registry schema
+  format), a 6-month deprecation window, and a documented security exception.
+  Closes the outstanding Wave 1.5 release-gate item.
+- [`docs/migration/0.1-to-1.0.md`](docs/migration/0.1-to-1.0.md) - procedural
+  before/after migration guide for the `0.1.0` → `1.0.0` bump (breaking
+  `abiRegistry` default, `decodedData` shape, Wave 8 registry configuration).
+  Narrative release notes remain in this file’s `[1.0.0]` entry when cut;
+  do not duplicate them into the guide.
+
+### Changed (repository)
+
+- **Roadmap refocused on the decoding standard.** Maintainer sign-off for
+  scope removal per `ROADMAP.md`'s own contribution rules. The former Phase 2
+  (SDK Ecosystem) is replaced by Phase 2 - The Decoding Standard (SEP draft,
+  `orbital codegen`, semantic layer, hosted registry). `@orbital-stellar/anchor-sdk`
+  is pulled forward into a new Phase 3 - Anchor Events. The former Phase 3
+  (Trust & Agent Layer: x402, agent-sdk, intent compiler, shadow-fork) and
+  Phase 4 (Protocol Permanence: identity layer, reactor library, 10+ SEPs)
+  are frozen and moved to an explicit Frozen section in `ROADMAP.md` with
+  per-item rationale and an unfreeze procedure. No shipped code is removed -
+  planned scope only.
+- Docs aligned with the refocused roadmap: README reframed around the
+  decoding standard; open-source-policy and proposal forward-references
+  updated; frozen-scope references removed from forward-looking docs.
+
+### Security
+
+- **`@orbital-stellar/anchor-sdk` 0.1.0 does not validate SEP-10 challenges
+  before signing them.** `Sep10Client.authenticate()` passed the anchor's
+  challenge XDR straight to the caller-supplied `sign` callback with no checks:
+  no verification of the anchor's signature, no source-account or `sequence == 0`
+  check, no `<home_domain> auth` Manage Data check, no time bounds. The
+  `network_passphrase` in the response was parsed and then ignored, and
+  `SIGNING_KEY` — the one value that can attribute a challenge to an anchor —
+  was read from `stellar.toml` and never used.
+
+  A hostile or compromised anchor, or an on-path attacker against a plain-`http`
+  `WEB_AUTH_ENDPOINT`, could return an ordinary transaction (a payment, or a
+  `set_options` adding a signer) and have it blind-signed by the consumer's
+  wallet, hardware device, or KMS.
+
+  Fixed in **0.2.0**. `Sep10Client` now verifies every challenge with
+  `WebAuth.readChallengeTx` before `sign` is invoked, rejects a
+  `network_passphrase` that disagrees with the configured network, and refuses a
+  non-`https` endpoint at construction.
+
+  This is a **breaking change to a surface that was itself the vulnerability**,
+  taken under the security exception in [`STABILITY.md`](./STABILITY.md).
+  A GitHub Security Advisory is to be published per [`SECURITY.md`](./SECURITY.md).
+
+  **Migration.** `Sep10Client` now requires the anchor's identity. The smallest
+  change is to build it from the anchor's own `stellar.toml`:
+
+  ```ts
+  // before - no way to tell whose challenge you were signing
+  const client = new Sep10Client(toml.WEB_AUTH_ENDPOINT);
+
+  // after - SIGNING_KEY and NETWORK_PASSPHRASE come from the toml you already fetch
+  const toml = await discoverAnchor("anchor.example");
+  const client = Sep10Client.fromToml(toml, "anchor.example");
+  ```
+
+  Or pass them explicitly: `new Sep10Client(endpoint, { serverAccountId,
+  networkPassphrase, homeDomain, webAuthDomain })`. Anchors that publish no
+  `SIGNING_KEY` are now refused rather than trusted.
 
 ---
 

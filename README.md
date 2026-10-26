@@ -9,13 +9,20 @@
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022-339933?style=flat-square&logo=node.js)](.github/workflows/ci.yml)
 [![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?style=flat-square&logo=conventionalcommits)](https://www.conventionalcommits.org)
 
-> **Status**: `v0.2.0` on npm &nbsp;·&nbsp; **Contracts**: testnet only &nbsp;·&nbsp; **License**: MIT
+> **Status**: `v0.2.0` on npm (all seven packages) &nbsp;·&nbsp; **Contracts**: testnet only &nbsp;·&nbsp; **License**: MIT
 >
-> The libraries read both networks. Orbital's own contracts are deployed to testnet and have not been deployed to mainnet - see [What works today](#what-works-today).
+> The libraries read both networks. Orbital's own contracts are deployed to testnet and not yet to mainnet. `main` is ahead of npm - see [What works today](#what-works-today) for which is which.
 
 **Stellar's biggest developer-experience gap is that Soroban events arrive as raw, untyped payloads with no shared vocabulary - every team invents its own decoding, and no two teams agree on what a `swap` or a `liquidation` even is.**
 
-Orbital ships the typed event layer once, openly: an open ABI/event-schema registry that makes decoding canonical, a typed event engine that normalizes Horizon and Soroban output into application-shaped events, codegen that puts those types into your codebase, plus composable webhook delivery and React hooks. Four MIT-licensed packages, designed to be composed.
+Orbital ships the typed event layer once, openly:
+
+- an **open ABI / event-schema registry** - on-chain on testnet, with signed attestations and a growing set of verified schemas for live mainnet protocols - that makes decoding canonical;
+- a **typed event engine** that normalizes Horizon, Soroban and CAP-67 unified events into application-shaped `NormalizedEvent`s;
+- **`orbital codegen`**, which puts those types into your codebase;
+- composable **webhook delivery**, **React hooks**, **anchor clients** and a **no-custody worker runtime**.
+
+Seven MIT-licensed packages, designed to be composed.
 
 ---
 
@@ -25,7 +32,9 @@ Orbital ships the typed event layer once, openly: an open ABI/event-schema regis
 - [What works today](#what-works-today)
 - [Packages](#packages)
 - [Quickstart](#quickstart)
+- [Starters](#starters)
 - [Architecture](#architecture)
+- [Repository layout](#repository-layout)
 - [Documentation](#documentation)
 - [Production hosting](#production-hosting)
 - [Roadmap](#roadmap)
@@ -47,29 +56,50 @@ Stellar's official APIs give you the raw firehose - and not much else:
 
 Every serious Stellar app - wallet, dashboard, anchor integration, analytics tool - re-solves the same problem. Orbital ships those primitives once, and the registry that makes decoding canonical, so you can `pnpm add` them instead of rebuilding them.
 
-For how this sits against SEP-48, the official JS SDK, Mercury and the other Stellar indexers - including where they win - see [`docs/competitive-landscape.md`](docs/competitive-landscape.md).
-
-The longer-form thesis, the multi-year vision, and the SCF grant case live in [`PROGRESS.md`](PROGRESS.md), [`ROADMAP.md`](ROADMAP.md), and `docs/proposal.md` (in progress).
+For how this sits against SEP-48, the official JS SDK, Mercury and the other Stellar indexers - including where they win - see [`docs/competitive-landscape.md`](docs/competitive-landscape.md). The longer-form thesis and plan live in [`ROADMAP.md`](ROADMAP.md) and [`docs/proposal.md`](docs/proposal.md).
 
 ---
 
 ## What works today
 
-Four different states get conflated in most project READMEs. They are separated here on purpose, because "it is in the repo" and "you can install it and it works" are not the same claim.
+"It is in the repo" and "you can install it and it works" are not the same claim, so they are separated here. **npm** is the `0.2.0` release (2026-09-23). **`main` only** means merged but not yet released - install from source to use it, and see `[Unreleased]` in the [CHANGELOG](CHANGELOG.md) and each package's own changelog.
 
-| Capability | On npm | In this repo | Notes |
-|---|---|---|---|
-| Horizon subscription + classic event taxonomy | ✅ `0.2.0` | ✅ | Payments, account ops, trustlines, offers, claimables, liquidity pools, manage-data |
-| Reconnection, rate-limit backoff, cursor persistence | ✅ `0.2.0` | ✅ | |
-| HMAC webhook delivery + verification | ✅ `0.2.0` | ✅ | Durable retry queues (memory, Redis, Postgres) and signing/verification exports |
-| React hooks | ✅ `0.2.0` | ✅ | 4.6 kB gzip |
-| **Soroban contract-event subscription** | ✅ `0.2.0` | ✅ | `CoreConfig.soroban.rpcUrl` configures the Soroban RPC endpoint. [#1132](https://github.com/orbital-stellar/orbital_stellar/issues/1132) is closed |
-| ABI registry client + WASM auto-discovery | ✅ `0.2.0` | ✅ | `discoverContractSpec()`, `createDefaultAbiRegistryClient()`, the `abi-registry verify` CLI, and bundled USDC / EURC / AQUA / native-asset specs |
-| Auto-publish indexer (`orbital-indexer`) | ✅ `0.2.0` (first publish) | ✅ | Discovers specs for unregistered contracts from their WASM and publishes them on-chain |
-| Anchor clients (`anchor-sdk`) | ✅ `0.2.0` (first publish) | ✅ | SEP-1, SEP-10, SEP-12, SEP-24 and SEP-31. Never holds a secret key |
-| Worker layer (`worker-core`) | ✅ `0.2.0` (first publish) | ⚠️ partial | Triggers, scheduling, verification and reputation exist. Workers call functions anyone could call - `contracts/payroll`'s `disburse()` is the reference. No custody anywhere. |
+### Event ingestion - `pulse-core`
 
-**npm carries the `0.2.0` release; `main` can be ahead of it between releases.** Unreleased work is listed under `[Unreleased]` in the [CHANGELOG](CHANGELOG.md), and you can always install from source (see [Quickstart](#quickstart)).
+| Capability | Where | Notes |
+|---|---|---|
+| Horizon SSE subscription + full classic taxonomy | npm `0.2.0` | Payments, account create/merge/options/bump-sequence, trustlines + auth, offers, claimable balances, liquidity pools, manage-data |
+| Soroban contract events | npm `0.2.0` | `engine.subscribeContract({ contractId, topics })`; `contract.invoked` / `contract.emitted` |
+| CAP-67 unified asset events (Protocol 23) | npm `0.2.0` | `ingestion: "unified" \| "horizon" \| "auto"` plus `soroban.unifiedEvents`; transfer / mint / burn / clawback / fee / set_authorized decoders. Default stays `"horizon"` |
+| Typed `decodedData` with zero config | npm `0.2.0` | `abiRegistry` defaults to the bundled + on-chain registry; `abiRegistry: false` opts out |
+| Reconnection, rate-limit backoff, dedupe | npm `0.2.0` | AWS full-jitter, `Retry-After` parsing, lifecycle notifications |
+| Cursor persistence | npm `0.2.0` | Memory, file, Postgres, Redis, S3, plus `cacheCursorStore` / `coalesceCursorStore` wrappers; `orbital cursor` backup CLI |
+| Multi-network engine | npm `0.2.0` | `network` accepts an array of sources, merged under one engine |
+| Historical replay source | npm `0.2.0` | `RpcHistoricalSource` (bounded by RPC's ~7-day retention) |
+
+### Decoding standard - `abi-registry`, `orbital-indexer`
+
+| Capability | Where | Notes |
+|---|---|---|
+| Registry clients + WASM auto-discovery | npm `0.2.0` | `createDefaultAbiRegistryClient()`, `OnChainAbiRegistryClient`, `discoverContractSpec()`, `ChainedAbiRegistryClient` (SEP-48 precedence) |
+| `orbital codegen` | npm `0.2.0` | `orbital.config.ts` manifest, `--watch`, `--check` drift gate for CI; TypeScript types + Zod schemas. Also `orbital typegen <contractId>` |
+| `abi-registry verify` CLI | npm `0.2.0` | Verifies a schema against deployed WASM; exit codes per verdict for CI |
+| Semantic taxonomy format | npm `0.2.0` | `schema/taxonomy.schema.json`, `validateTaxonomyEntry()`, `findTaxonomyConflicts()` |
+| Auto-publish indexer | npm `0.2.0` | `AutoPublishIndexer` discovers specs for unregistered contracts and publishes them on-chain |
+| **Signed attestations, envelope v1** | `main` only - **breaking** | SEP-53 signing with domain separation, RFC 8785 canonical JSON, expiry + supersession, trust tiers (`deployer` > `third-party` > `unbound`). Conformance vectors + Go and Rust reference verifiers. 0.2.0 envelopes must be re-signed |
+| **Verified mainnet schemas** | `main` only | 29 community-contributed specs in [`specs/community/`](packages/abi-registry/specs/community), each with a `match` verdict re-checked in CI - Blend, Soroswap, Phoenix, Aquarius, Reflector, DeFindex, FxDAO, Comet, Allbridge, KALE, Slender, Orbit and more |
+| **Mainnet-aware registry selection** | `main` only | `createDefaultAbiRegistryClient({ network: "mainnet" })`; skips the on-chain link until a mainnet registry exists, never falls back to testnet |
+| Open data (taxonomy + entity labels) | repo | [`data/`](data) - `taxonomy.json`, `labels.json`, per-protocol labels, integrity hashes |
+
+### Delivery, UI, anchors, workers
+
+| Capability | Where | Notes |
+|---|---|---|
+| HMAC webhook delivery + verification | npm `0.2.0` | `verifyWebhook` (Node) / `verifyWebhookEdge` (Web Crypto), SSRF + DNS-rebinding guard |
+| Durable retry + dead-letter queues | npm `0.2.0` | Retry: memory, Redis, Postgres, SQS. DLQ: memory, Postgres, with the `orbital-dlq` CLI. Prometheus + OpenTelemetry metrics |
+| React hooks | npm `0.2.0` | 4.6 kB gzip; Suspense, error boundary, devtools panel, Vite plugin |
+| Anchor clients | npm `0.2.0` | SEP-1, SEP-10 (challenge verified before signing), SEP-12, SEP-24, SEP-31. Never holds a secret key |
+| Worker runtime (W0-W3) | npm `0.2.0` | Triggers, schedules, guard rails, paymaster, verification, operator reputation, registry, `orbital-worker` CLI. Workers only call functions anyone could call - [`contracts/payroll`](contracts/payroll)'s `disburse()` is the reference. **No custody anywhere**; W4 (vault, latency tier) was dropped |
 
 ### On-chain status
 
@@ -78,24 +108,23 @@ Four different states get conflated in most project READMEs. They are separated 
 | `registry` | deployed, 4 specs published | not deployed |
 | `demo-emitter` | deployed | not deployed (testnet fixture by design) |
 | `payroll` | deployed | not deployed |
+| `vault` | placeholder crate, not a contract | - |
 
-The testnet `registry` holds four published specs - USD Coin (USDC), Euro Coin (EURC), Aquarius (AQUA) and the native asset wrapper (XLM SAC) - each recorded with its spec hash and publisher under `seededSpecs` in [`contracts/deployed.testnet.json`](contracts/deployed.testnet.json), which is the source of record for every contract ID and WASM hash. Nothing is deployed to mainnet; see [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md).
+The testnet `registry` holds four published specs - USD Coin (USDC), Euro Coin (EURC), Aquarius (AQUA) and the native asset wrapper (XLM SAC). [`contracts/deployed.testnet.json`](contracts/deployed.testnet.json) is the source of record for every contract ID, WASM hash and published spec hash. Nothing is deployed to mainnet; see [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md).
 
 ---
 
 ## Packages
 
-| Package | Description | Status |
+| Package | What it is | CLI |
 |---|---|---|
-| [`@orbital-stellar/pulse-core`](./packages/pulse-core) | EventEngine - Horizon + Soroban subscription, normalization, reconnection, rate-limit handling, cursor persistence | ✅ Shipped |
-| [`@orbital-stellar/pulse-webhooks`](./packages/pulse-webhooks) | HMAC-signed webhook delivery + verification (Node + edge runtimes), durable retry queues | ✅ Shipped |
-| [`@orbital-stellar/pulse-notify`](./packages/pulse-notify) | React hooks - `useStellarEvent`, `useContractEvent`, `useStellarPayment`, `useStellarActivity`, `useStellarAddresses`, `useStellarHistory`, `StellarConnectionStatus`, `StellarEventBoundary` | ✅ Shipped |
-| [`@orbital-stellar/abi-registry`](./packages/abi-registry) | Canonical Soroban ABI client, schema helpers, and registry publisher interface | ✅ Shipped |
-| [`@orbital-stellar/orbital-indexer`](./packages/orbital-indexer) | Auto-publish indexer - discovers specs for unregistered contracts and publishes them to the on-chain registry | ✅ Shipped |
-| [`@orbital-stellar/anchor-sdk`](./packages/anchor-sdk) | Typed clients for SEP-1 discovery, SEP-10 auth, SEP-12 KYC, SEP-24 and SEP-31 | ✅ Shipped |
-| [`@orbital-stellar/worker-core`](./packages/worker-core) | Worker runtime - triggers, schedules, subscriptions and guard rails; no custody | ✅ Shipped |
-
-> The full classic-operation taxonomy is shipped (payments, account create/merge/options/bump-sequence, trustlines + auth, offers, claimables, liquidity pools, manage-data), alongside Soroban contract event subscription (`engine.subscribeContract`), cursor persistence, and the ABI registry client - see [`ROADMAP.md`](ROADMAP.md).
+| [`@orbital-stellar/pulse-core`](./packages/pulse-core) | `EventEngine` - Horizon, Soroban and CAP-67 ingestion, normalization, reconnection, cursor persistence | `orbital` |
+| [`@orbital-stellar/pulse-webhooks`](./packages/pulse-webhooks) | HMAC-signed webhook delivery + verification (Node and edge), durable retry and dead-letter queues, metrics | `orbital-dlq` |
+| [`@orbital-stellar/pulse-notify`](./packages/pulse-notify) | React hooks - `useStellarEvent`, `useContractEvent`, `useStellarPayment`, `useStellarActivity`, `useStellarAddresses`, `useStellarHistory`, `useStellarEventSuspense`, plus `StellarConnectionStatus` and `StellarEventBoundary` | - |
+| [`@orbital-stellar/abi-registry`](./packages/abi-registry) | Registry clients, WASM spec discovery, codegen, schema verification, semantic taxonomy, signed attestations | `orbital-codegen`, `abi-registry`, `abi-registry-generate` |
+| [`@orbital-stellar/orbital-indexer`](./packages/orbital-indexer) | Auto-publish indexer - fills the on-chain registry as part of normal engine operation | - |
+| [`@orbital-stellar/anchor-sdk`](./packages/anchor-sdk) | Typed, schema-validated clients for SEP-1, SEP-10, SEP-12, SEP-24 and SEP-31 | - |
+| [`@orbital-stellar/worker-core`](./packages/worker-core) | Worker runtime - triggers, schedules, subscriptions, guard rails, verification, reputation; no custody | `orbital-worker` |
 
 ### Browser bundle sizes
 
@@ -119,21 +148,22 @@ Install only what you need from npm:
 pnpm add @orbital-stellar/pulse-core             # always
 pnpm add @orbital-stellar/pulse-webhooks         # if you push events to HTTPS endpoints
 pnpm add @orbital-stellar/pulse-notify react     # if you render live events in React
-pnpm add @orbital-stellar/abi-registry           # if you decode Soroban contract events
+pnpm add @orbital-stellar/abi-registry           # if you decode Soroban events or run codegen
 pnpm add @orbital-stellar/orbital-indexer        # if you auto-publish specs for unregistered contracts
 pnpm add @orbital-stellar/anchor-sdk             # if you integrate with Stellar anchors
 pnpm add @orbital-stellar/worker-core            # if you run workers
 ```
 
-Or clone the repo to work from source:
+Or work from source (needed for anything marked `main` only above):
 
 ```bash
 git clone https://github.com/orbital-stellar/orbital_stellar.git
 cd orbital_stellar
 pnpm install
+pnpm build
 ```
 
-### Subscribe to events directly
+### Subscribe to account events
 
 ```ts
 import { EventEngine } from "@orbital-stellar/pulse-core";
@@ -150,6 +180,40 @@ watcher.on("payment.received", (event) => {
 watcher.on("*", (event) => {
   // Every event for this address, regardless of type
 });
+```
+
+### Subscribe to contract events, decoded
+
+```ts
+const contract = engine.subscribeContract({
+  contractId: "CA...",
+  topics: ["transfer"], // optional topic filter
+});
+
+contract.on("contract.emitted", (event) => {
+  // decodedData is populated for any contract the registry knows;
+  // otherwise the raw XDR is on event.raw.
+  console.log(event.contractId, event.topic, event.decodedData);
+});
+```
+
+### Generate types for the contracts you use
+
+```ts
+// orbital.config.ts
+export default {
+  network: "testnet",
+  outDir: "./src/generated",
+  contracts: [
+    { contractId: "CBGPM7FULEXM2WO4USIPC6XDJXKFUODU3EFAOVUZTJRAW4EJ2ZUA7PBJ", name: "demoEmitter" },
+  ],
+};
+```
+
+```bash
+pnpm exec orbital-codegen           # write TypeScript types + Zod schemas
+pnpm exec orbital-codegen --check   # CI: fail if generated output has drifted
+pnpm exec orbital-codegen --watch   # regenerate when a spec changes
 ```
 
 ### Deliver events to a webhook
@@ -170,7 +234,7 @@ new WebhookDelivery(watcher, {
 });
 ```
 
-Receivers verify the signature with `verifyWebhook` (Node) or `verifyWebhookEdge` (Cloudflare Workers / Vercel Edge / Deno / browsers).
+Receivers verify the signature with `verifyWebhook` (Node) or `verifyWebhookEdge` (Cloudflare Workers / Vercel Edge / Deno / browsers). Pass a `retryQueue` to survive restarts.
 
 ### Render live events in React
 
@@ -189,7 +253,19 @@ export function IncomingPayments({ address }: { address: string }) {
 }
 ```
 
-Run it against testnet, send a test payment from the [Stellar Laboratory](https://laboratory.stellar.org), and you'll see the event print within seconds. The full guide lives at [`apps/web/content/getting-started/quick-start.md`](apps/web/content/getting-started/quick-start.md).
+Run it against testnet, send a test payment from the [Stellar Laboratory](https://laboratory.stellar.org), and the event prints within seconds. The full guide lives at [`apps/web/content/getting-started/quick-start.md`](apps/web/content/getting-started/quick-start.md); recipes are in [`docs/COOKBOOK.md`](docs/COOKBOOK.md).
+
+---
+
+## Starters
+
+Three runnable reference apps in [`examples/`](examples), each installing `@orbital-stellar/*` from npm and each with an `orbital.config.ts` for `orbital codegen`:
+
+| Starter | Shows |
+|---|---|
+| [`next-starter`](examples/next-starter) | Engine + file cursor on the server, a plain SSE stream to the browser, `useStellarEvent` on the client |
+| [`express-starter`](examples/express-starter) | Ingest, persist a cursor, deliver HMAC-signed webhooks, verify them on the receiving end |
+| [`anchor-starter`](examples/anchor-starter) | SEP-1 discovery, SEP-10 auth, an interactive SEP-24 deposit and a SEP-31 send against SDF's `testanchor.stellar.org` |
 
 ---
 
@@ -198,38 +274,63 @@ Run it against testnet, send a test payment from the [Stellar Laboratory](https:
 ```mermaid
 flowchart LR
   subgraph Stellar["Stellar network"]
-    Horizon["Horizon REST + SSE"]
-    RPC["Stellar RPC<br/>(Soroban events)"]
+    Horizon["Horizon SSE"]
+    RPC["Stellar RPC<br/>Soroban + CAP-67 events"]
+    Registry["registry contract<br/>(testnet)"]
   end
 
-  subgraph Core["@orbital-stellar/pulse-core"]
+  subgraph Core["pulse-core"]
     Engine["EventEngine<br/>subscribe · reconnect · backoff"]
-    Watcher["Watcher<br/>per-address pub/sub"]
-    Normalize["Normalize<br/>13 op types → typed events"]
-    Cursor["Cursor persistence<br/>memory · file · Postgres · Redis · S3"]
+    Normalize["Normalize<br/>classic · Soroban · unified → NormalizedEvent"]
+    Watcher["Watcher<br/>per-address / per-contract pub/sub"]
+    Cursor["CursorStore<br/>memory · file · Postgres · Redis · S3"]
   end
 
-  subgraph Webhooks["@orbital-stellar/pulse-webhooks"]
-    Sign["HMAC-SHA256<br/>+ retry + SSRF"]
-    Verify["verifyWebhook<br/>verifyWebhookEdge"]
+  subgraph ABI["abi-registry + orbital-indexer"]
+    Resolve["Spec resolution<br/>embedded WASM → registry → bundled"]
+    Attest["Attestations<br/>signed · trust-tiered"]
+    Codegen["orbital codegen<br/>types + Zod"]
+    Indexer["AutoPublishIndexer"]
   end
 
-  subgraph Notify["@orbital-stellar/pulse-notify"]
-    Hooks["useStellarEvent<br/>useStellarPayment<br/>useStellarActivity"]
+  subgraph Out["Delivery"]
+    Webhooks["pulse-webhooks<br/>HMAC · retry · DLQ · SSRF guard"]
+    Hooks["pulse-notify<br/>React hooks"]
+    Workers["worker-core<br/>triggers · guard rails · no custody"]
   end
 
   Horizon --> Engine
   RPC --> Engine
   Engine --> Normalize --> Watcher
   Engine --> Cursor
-  Watcher --> Sign
-  Watcher --> Hooks
-  Sign -->|x-orbital-signature| YourBackend["Your endpoint"]
-  YourBackend --> Verify
-  Hooks --> Browser["React app"]
+  Normalize -->|decodedData| Resolve
+  Resolve --> Registry
+  Attest --> Resolve
+  Indexer -->|publish| Registry
+  Resolve --> Codegen
+  Watcher --> Webhooks -->|x-orbital-signature| YourBackend["Your endpoint"]
+  Watcher --> Hooks --> Browser["React app"]
+  Watcher --> Workers
 ```
 
-The reference composition - a Next.js route handler that subscribes to an address and streams events as SSE, plus an HMAC-signing route for the on-page webhook demo - lives in [`apps/web/app/api`](apps/web/app/api).
+The reference composition - a Next.js route handler that subscribes to an address and streams events as SSE, plus an HMAC-signing route for the on-page webhook demo - lives in [`apps/web/app/api`](apps/web/app/api). The deeper walk-through is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Repository layout
+
+```
+orbital_stellar/
+├── packages/          # the seven npm packages
+├── apps/web/          # docs site, registry explorer, demos, worker directory (Next.js)
+├── contracts/         # Soroban contracts (own Cargo workspace): registry, demo-emitter, payroll, vault placeholder
+├── examples/          # next-starter, express-starter, anchor-starter
+├── data/              # open data: event taxonomy and entity labels
+├── docs/              # architecture, cookbook, SEP draft, design notes, runbooks
+└── scripts/           # reference-doc, open-data and Horizon-type generators
+```
+
+`apps/web` serves the docs (`/docs`, `/reference`), a registry explorer (`/registry`, `/explore`), the contract-event demo (`/demo/contracts`), the starters page and the worker directory (`/workers`).
 
 ---
 
@@ -237,21 +338,25 @@ The reference composition - a Next.js route handler that subscribes to an addres
 
 | Document | What it covers |
 |---|---|
-| [`PROGRESS.md`](PROGRESS.md) | Phase 0 completion status, project structure, architecture overview |
-| [`ROADMAP.md`](ROADMAP.md) | The decoding-standard thesis, Phase 0 → Phase 3 plan, and the Frozen section for out-of-scope items |
-| [`STABILITY.md`](STABILITY.md) | The `v1.0` semver pledge - covered API surface, wire/data contracts, deprecation policy |
+| [`ROADMAP.md`](ROADMAP.md) | The decoding-standard thesis, phases and release gates, and the Frozen section |
+| [`PROGRESS.md`](PROGRESS.md) | Current status by package |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes (top-level; per-package changelogs roll up) |
-| [`STABILITY.md`](STABILITY.md) | Semver pledge, deprecation window, migration-path policy from `v1.0.0` |
+| [`STABILITY.md`](STABILITY.md) | The `v1.0` semver pledge - covered API surface, wire/data contracts, deprecation policy |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Package map, event lifecycle, normalization, registry |
+| [`docs/COOKBOOK.md`](docs/COOKBOOK.md) | Recipes for common compositions |
+| [`docs/CAP-67-Event-Mapping.md`](docs/CAP-67-Event-Mapping.md) | How CAP-67 unified events map onto `NormalizedEvent` |
 | [`docs/semantic-layer.md`](docs/semantic-layer.md) | Mappings, labels, precedence, honesty rule, mainnet worked example |
-| [`docs/migration/0.1-to-1.0.md`](docs/migration/0.1-to-1.0.md) | Breaking-change before/after guide from `0.1.0` → `1.0.0` |
+| [`docs/sep/orbital-registry-sep.md`](docs/sep/orbital-registry-sep.md) | The draft SEP: registry, verification, attestation envelope (§5) |
+| [`docs/cursor-format.md`](docs/cursor-format.md) | Cursor wire format |
+| [`docs/testnet-deployment.md`](docs/testnet-deployment.md) / [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md) | Deploying the contracts, key custody, wiring the client |
+| [`docs/design/workers.md`](docs/design/workers.md) | Worker layer design and the trigger-is-not-the-custodian rule |
+| [`docs/migration/0.1-to-1.0.md`](docs/migration/0.1-to-1.0.md) | Breaking-change before/after guide |
+| [`docs/slo.md`](docs/slo.md) | Service-level objectives |
+| [`docs/competitive-landscape.md`](docs/competitive-landscape.md) | Orbital against SEP-48, the JS SDK, Mercury and other indexers |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, coding standards, PR process, Drips Wave Program |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability disclosure policy |
-| [`packages/pulse-core/README.md`](packages/pulse-core/README.md) | EventEngine API, event taxonomy, configuration |
-| [`packages/pulse-webhooks/README.md`](packages/pulse-webhooks/README.md) | Delivery contract, verification, SSRF safety |
-| [`packages/pulse-notify/README.md`](packages/pulse-notify/README.md) | React hooks, type narrowing, authentication |
-| [`packages/abi-registry/README.md`](packages/abi-registry/README.md) | ABI Registry client, publisher interface, and shared schema helpers |
-| [`apps/web/README.md`](apps/web/README.md) | Marketing site + sandboxed demo API routes |
+
+Each package has its own README with the full API: [pulse-core](packages/pulse-core/README.md) · [pulse-webhooks](packages/pulse-webhooks/README.md) · [pulse-notify](packages/pulse-notify/README.md) · [abi-registry](packages/abi-registry/README.md) · [orbital-indexer](packages/orbital-indexer/README.md) · [anchor-sdk](packages/anchor-sdk/README.md) · [worker-core](packages/worker-core/README.md).
 
 ---
 
@@ -259,19 +364,20 @@ The reference composition - a Next.js route handler that subscribes to an addres
 
 Two paths:
 
-1. **Build your own backend** - install the SDKs, wire them into your existing Node.js or edge worker, deploy on the infrastructure you already operate. The Next.js route handlers in [`apps/web/app/api`](apps/web/app/api) are a copy-paste reference.
+1. **Build your own backend** - install the SDKs, wire them into your existing Node.js or edge worker, deploy on the infrastructure you already operate. The [starters](#starters) and the route handlers in [`apps/web/app/api`](apps/web/app/api) are copy-paste references.
 2. **Use Orbital Cloud (in development)** - managed runtime handling multi-region orchestration, persistent webhook registries, replay, and observability. Out of scope for this repository.
 
 ---
 
 ## Roadmap
 
-- **Shipped** - Full classic operation taxonomy, edge-runtime webhook verification, React hooks, Soroban event subscription, ABI registry client, cursor persistence, durable retry queues, npm publish ✅
-- **In progress (Phase 1)** - `STABILITY.md` v1.0 semver pledge merged; starter boilerplates and the `v1.0.0` tag outstanding
-- **2026 H2 (Phase 2 - The Decoding Standard)** - SEP draft for a standardized Soroban event schema, `orbital codegen`, the semantic layer (event taxonomy + entity labels), hosted registry
-- **2027 H1 (Phase 3 - Anchor Events)** - `@orbital-stellar/anchor-sdk`, SEP-24/31 lifecycle events normalized into the standard taxonomy
+- **Phase 0 - Foundation** - shipped (`v0.1.0`, 2026-05).
+- **Phase 1 - Production SDK** - the SDK surface, Soroban + CAP-67 ingestion, cursor persistence, durable queues, `STABILITY.md` and the three starters are done. Outstanding: the `v1.0.0` tag.
+- **Phase 2 - The Decoding Standard** - in progress. Shipped: the testnet registry, `orbital codegen` (used by all three starters), the SEP draft, the taxonomy format, open data, attestation envelope v1 and 29 verified mainnet schemas. Outstanding: submitting the SEP to `stellar/stellar-protocol`, the hosted registry and verification pipeline, and a mainnet registry deploy.
+- **Phase 3 - Anchor Events** - `anchor-sdk` shipped on npm; lifecycle taxonomy and design partners next.
+- **Phase 4 - Workers** - W0-W3 shipped in `worker-core`; W4 (custodial vault, latency tier) dropped.
 
-Full multi-year plan, plus what's explicitly frozen out of scope, in [`ROADMAP.md`](ROADMAP.md).
+Release gates, per-wave checklists and what's explicitly frozen out of scope are in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -281,8 +387,9 @@ Contributions are welcome from the Stellar community. Start here:
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev loop, coding standards, and PR process.
 - Browse [issues tagged `good-first-issue`](https://github.com/orbital-stellar/orbital_stellar/labels/good-first-issue) - scoped, unblocked, reviewer-ready.
+- Add a verified schema for a mainnet contract - see [`docs/semantic-layer/submitting.md`](docs/semantic-layer/submitting.md) and the existing entries in [`specs/community/`](packages/abi-registry/specs/community).
 - Stellar Wave Program issues are tagged `wave-program` and pay per-merge per complexity points.
-- Run the test suite before submitting: `pnpm -r typecheck && pnpm test`.
+- Run the checks before submitting: `pnpm -r typecheck && pnpm lint && pnpm test`.
 
 All contributors are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 

@@ -47,7 +47,7 @@ flowchart LR
   subgraph Stellar["Stellar network"]
     Horizon["Horizon REST + SSE"]
     RPC["Stellar RPC<br/>Soroban events"]
-    Unified["Stellar RPC getEvents<br/>CAP-67 unified stream<br/>🛠️ Wave 1.6"]
+    Unified["Stellar RPC getEvents<br/>CAP-67 unified stream<br/>✅ opt-in"]
   end
 
   subgraph Subscribe["Subscription plane<br/>@orbital-stellar/pulse-core"]
@@ -258,7 +258,7 @@ optional fields stays additive, adding required ones later would not.
 
 ---
 
-## 4.1 Unified event ingestion (CAP-67) 🛠️
+## 4.1 Unified event ingestion (CAP-67) ✅
 
 Protocol 23's CAP-67 lets classic asset movements (transfer, mint, burn,
 clawback, `set_authorized`) emit Soroban-format events in a single stream,
@@ -267,10 +267,11 @@ This is a third transport alongside Horizon SSE and the Soroban contract-event
 subscriber, tracked as Wave 1.6 in [`ROADMAP.md`](../ROADMAP.md) and designed
 in [`docs/design/cap67-mapping.md`](./design/cap67-mapping.md) (see also
 [`docs/CAP-67-Event-Mapping.md`](./CAP-67-Event-Mapping.md) for the taxonomy
-rationale). As of this writing the pieces below exist as independent,
-tested building blocks; wiring them into `EventEngine`'s live delivery path -
-so a family routed to "unified" actually stops arriving via Horizon and
-starts arriving via the unified stream instead - is still forthcoming.
+rationale). It shipped in `0.2.0` and is wired into `EventEngine`'s live
+delivery path: when the effective mode is `"unified"`, a family with a unified
+equivalent stops arriving via Horizon and arrives via the unified stream
+instead. The unified poller is started only when `soroban.unifiedEvents` is
+set, and keeps its own cursor.
 
 **Ingestion mode.** `CoreConfig.ingestion?: "unified" | "horizon" | "auto"`
 (default `"horizon"`) selects a transport preference. `"horizon"` is the
@@ -295,10 +296,12 @@ encoding this:
 | `trustlineAuth` (`set_authorized`) | Horizon | Unified |
 | `trustlineLimit`, `accountCreated`, `accountOptions`, `accountMerge`, `offer`, `bumpSequence`, `manageData`, `claimableBalance`, `liquidityPool` | Horizon | Horizon |
 
-`"auto"` mode is designed to resolve to one of the two columns above (never
-a third behavior) based on the CAP-67-capability probe described above -
-that probe isn't implemented yet, so `"auto"` currently behaves like
-`"horizon"` in practice.
+`"auto"` resolves to one of the two columns above (never a third behavior).
+On start the engine reads the RPC's `getNetwork` protocol version and
+resolves `"auto"` to `"unified"` only when a unified transport is configured
+and the protocol is CAP-67-capable (`rpcSupportsUnifiedEvents`); otherwise it
+resolves to `"horizon"`. The resolved transport is reported as
+`engine.status().effectiveIngestion`.
 
 **Dedupe window.** During a routing transition - a mode switch, or `"auto"`
 falling back and recovering - both transports can briefly observe the same
@@ -322,7 +325,7 @@ flowchart LR
 ```
 
 A COOKBOOK recipe for migrating an existing Horizon-only deployment onto
-unified ingestion, once live routing lands, is planned but not yet written.
+unified ingestion is planned but not yet written.
 
 ---
 
