@@ -33,7 +33,7 @@ why `serverUrl` is `"/api"` and the route lives at `app/api/events/[address]`.
 
 ## Deploy
 
-One-click to Vercel from the [starters page](https://orbital-stellar.vercel.app/starters).
+One-click to Vercel from the [starters page](https://stellar-orbital-dev.vercel.app/starters).
 Because this lives inside the Orbital monorepo, the deploy link sets
 **Root Directory** to `examples/next-starter` — if you deploy manually, set that
 yourself or the build will run against the repo root.
