@@ -8,9 +8,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "codegen": "node ../../packages/abi-registry/bin/orbital-codegen",
     "codegen:check": "node ../../packages/abi-registry/bin/orbital-codegen --check",

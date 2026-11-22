@@ -20,8 +20,6 @@ coverage/
 **/.tmp-vitest/
 
 # ── Environment & secrets ─────────────────────────────────────────────────────
-.env
-.env.*
 !.env.example
 !.env.test
 
@@ -39,7 +37,6 @@ Thumbs.db
 desktop.ini
 
 # ── Editors ───────────────────────────────────────────────────────────────────
-.vscode/
 .idea/
 *.suo
 *.ntvs*
@@ -60,3 +57,4 @@ desktop.ini
 .kiro/
 
 maintainer.md
+config.bat

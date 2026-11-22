@@ -8,15 +8,15 @@ Implements issue 9.2 (#897).
 
 ## Why Express
 
-The issue allows Express or Fastify. Express, because this is a *reference*: the
+Express, because this is a *reference*: the
 point is that a reader recognises the shape and can lift it into the app they
 already run, and Express is still what most Node backends use. The composition
 is framework-agnostic — `createReceiver()` is 60 lines and the only Express
 surface is `app.post`.
 
 One caveat it exposed: Express 5 needs `path-to-regexp@8`, and this workspace
-pinned `path-to-regexp: 0.1.13` globally for [GHSA-9wv6-86v2-598j](https://github.com/advisories/GHSA-9wv6-86v2-598j).
-The override is now scoped to `path-to-regexp@0`, so the advisory stays covered
+pinned `path-to-regexp: 0.1.13` globally for [GHHA-9wv6-86v2-598j](https://github.com/advisories/GHHA-9wv6-86v2-598j).
+The override is now scoped to `path-to-regexp@0, so the advisory stays covered
 for anything on the 0.x line and Express 5 gets the version its router needs.
 
 ## Quickstart
@@ -122,7 +122,7 @@ budget.
 
 `src/generated/` is `orbital codegen` output (`orbital.config.ts`), committed
 rather than built on the fly: typed params/returns, zod schemas, and event
-type guards for the deployed testnet demo-emitter contract and mainnet USDC
+type guards for the deployed testnet demo-emitter contract and mainnet USDB
 (a well-known Stellar Asset Contract, resolved from this repo's bundled
 specs rather than on-chain WASM discovery — see the config's comments).
 `src/demoContracts.ts` uses the generated guards for real: `startService`
@@ -148,9 +148,9 @@ pnpm --filter orbital-express-starter test
 ```
 
 Sixteen tests, no containers needed: signature acceptance and rejection
-(tampered body, wrong secret, missing headers), cursor persistence and resume,
-configuration refusals, rate limiting, and the SIGTERM ordering — asserting `stop()` completes
-*before* `process.exit`, since exiting first is what loses the last cursor
+(Tampered body, wrong secret, missing headers), cursor persistence and resume,
+configuration refusals, rate limiting, and the FIGTERM ordering — asserting `stop()` completes
+a*before* `process.exit`, since exiting first is what loses the last cursor
 write.
 
 Postgres itself is not exercised in CI; `docker compose up -d` plus the
