@@ -1,0 +1,187 @@
+{
+  "contractId": "CCQXWMZVM3KRTXTUPTN53YHL272QGKF32L7XEDNZ2S6OSUFK3NFBGG5M",
+  "description": "Band Protocol standard reference on Stellar mainnet: the price reference contract that Band relayers write to and that consumers read with get_reference_data.",
+  "events": [],
+  "functions": [
+    {
+      "name": "init",
+      "params": [
+        { "name": "admin_addr", "type": "address" },
+        { "name": "instance_threshold", "type": "u32" },
+        { "name": "instance_ttl", "type": "u32" },
+        { "name": "temporary_threshold", "type": "u32" },
+        { "name": "temporary_tll", "type": "u32" }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "upgrade",
+      "params": [{ "name": "new_wasm_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": "void"
+    },
+    { "name": "version", "params": [], "returns": "u32" },
+    { "name": "current_admin", "params": [], "returns": "address" },
+    {
+      "name": "transfer_admin",
+      "params": [{ "name": "new_admin", "type": "address" }],
+      "returns": "void"
+    },
+    {
+      "name": "current_ttl_config",
+      "params": [],
+      "returns": { "name": "TTLConfig", "type": "named" }
+    },
+    {
+      "name": "update_ttl_config",
+      "params": [
+        { "name": "instance_threshold", "type": "u32" },
+        { "name": "instance_ttl", "type": "u32" },
+        { "name": "temporary_threshold", "type": "u32" },
+        { "name": "temporary_ttl", "type": "u32" }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "is_relayer",
+      "params": [{ "name": "address", "type": "address" }],
+      "returns": "bool"
+    },
+    {
+      "name": "add_relayers",
+      "params": [{ "name": "addresses", "type": { "item": "address", "type": "vec" } }],
+      "returns": "void"
+    },
+    {
+      "name": "remove_relayers",
+      "params": [{ "name": "addresses", "type": { "item": "address", "type": "vec" } }],
+      "returns": "void"
+    },
+    {
+      "name": "relay",
+      "params": [
+        { "name": "from", "type": "address" },
+        {
+          "name": "symbol_rates",
+          "type": { "item": { "elements": ["symbol", "u64"], "type": "tuple" }, "type": "vec" }
+        },
+        { "name": "resolve_time", "type": "u64" },
+        { "name": "request_id", "type": "u64" }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "force_relay",
+      "params": [
+        {
+          "name": "symbol_rates",
+          "type": { "item": { "elements": ["symbol", "u64"], "type": "tuple" }, "type": "vec" }
+        },
+        { "name": "resolve_time", "type": "u64" },
+        { "name": "request_id", "type": "u64" }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "delist",
+      "params": [{ "name": "symbols", "type": { "item": "symbol", "type": "vec" } }],
+      "returns": "void"
+    },
+    {
+      "name": "get_ref_data",
+      "params": [{ "name": "symbols", "type": { "item": "symbol", "type": "vec" } }],
+      "returns": {
+        "err": { "name": "StandardReferenceError", "type": "named" },
+        "ok": { "item": { "name": "RefDatum", "type": "named" }, "type": "vec" },
+        "type": "result"
+      }
+    },
+    {
+      "name": "get_reference_data",
+      "params": [
+        {
+          "name": "symbol_pairs",
+          "type": { "item": { "elements": ["symbol", "symbol"], "type": "tuple" }, "type": "vec" }
+        }
+      ],
+      "returns": {
+        "err": { "name": "StandardReferenceError", "type": "named" },
+        "ok": { "item": { "name": "ReferenceDatum", "type": "named" }, "type": "vec" },
+        "type": "result"
+      }
+    }
+  ],
+  "name": "Band Protocol StandardReference",
+  "network": "mainnet",
+  "types": {
+    "DataKey": {
+      "cases": [
+        { "fields": [], "name": "Admin" },
+        { "fields": [], "name": "TTLConfig" },
+        { "fields": [{ "name": "_0", "type": "address" }], "name": "Relayer" },
+        { "fields": [{ "name": "_0", "type": "symbol" }], "name": "RefData" }
+      ],
+      "kind": "union",
+      "name": "DataKey"
+    },
+    "RefDatum": {
+      "fields": [
+        { "name": "rate", "type": "u64" },
+        { "name": "request_id", "type": "u64" },
+        { "name": "resolve_time", "type": "u64" }
+      ],
+      "kind": "struct",
+      "name": "RefDatum"
+    },
+    "ReferenceDatum": {
+      "fields": [
+        { "name": "last_updated_base", "type": "u64" },
+        { "name": "last_updated_quote", "type": "u64" },
+        { "name": "rate", "type": "u128" }
+      ],
+      "kind": "struct",
+      "name": "ReferenceDatum"
+    },
+    "StandardReferenceError": {
+      "kind": "enum",
+      "name": "StandardReferenceError",
+      "variants": [
+        { "discriminant": 0, "name": "NotInitializedError" },
+        { "discriminant": 1, "name": "NoRefDataError" },
+        { "discriminant": 2, "name": "ArithmeticError" }
+      ]
+    },
+    "TTLConfig": {
+      "fields": [
+        { "name": "instance_threshold", "type": "u32" },
+        { "name": "instance_ttl", "type": "u32" },
+        { "name": "temporary_threshold", "type": "u32" },
+        { "name": "temporary_ttl", "type": "u32" }
+      ],
+      "kind": "struct",
+      "name": "TTLConfig"
+    }
+  },
+  "version": "0.0.0",
+  "xdrEntries": [
+    "AAAABAAAAAAAAAAAAAAAFlN0YW5kYXJkUmVmZXJlbmNlRXJyb3IAAAAAAAMAAAAAAAAAE05vdEluaXRpYWxpemVkRXJyb3IAAAAAAAAAAAAAAAAOTm9SZWZEYXRhRXJyb3IAAAAAAAEAAAAAAAAAD0FyaXRobWV0aWNFcnJvcgAAAAAC",
+    "AAAAAAAAAAAAAAAEaW5pdAAAAAUAAAAAAAAACmFkbWluX2FkZHIAAAAAABMAAAAAAAAAEmluc3RhbmNlX3RocmVzaG9sZAAAAAAABAAAAAAAAAAMaW5zdGFuY2VfdHRsAAAABAAAAAAAAAATdGVtcG9yYXJ5X3RocmVzaG9sZAAAAAAEAAAAAAAAAA10ZW1wb3JhcnlfdGxsAAAAAAAABAAAAAA=",
+    "AAAAAAAAAAAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAAA",
+    "AAAAAAAAAAAAAAAHdmVyc2lvbgAAAAAAAAAAAQAAAAQ=",
+    "AAAAAAAAAAAAAAANY3VycmVudF9hZG1pbgAAAAAAAAAAAAABAAAAEw==",
+    "AAAAAAAAAAAAAAAOdHJhbnNmZXJfYWRtaW4AAAAAAAEAAAAAAAAACW5ld19hZG1pbgAAAAAAABMAAAAA",
+    "AAAAAAAAAAAAAAASY3VycmVudF90dGxfY29uZmlnAAAAAAAAAAAAAQAAB9AAAAAJVFRMQ29uZmlnAAAA",
+    "AAAAAAAAAAAAAAARdXBkYXRlX3R0bF9jb25maWcAAAAAAAAEAAAAAAAAABJpbnN0YW5jZV90aHJlc2hvbGQAAAAAAAQAAAAAAAAADGluc3RhbmNlX3R0bAAAAAQAAAAAAAAAE3RlbXBvcmFyeV90aHJlc2hvbGQAAAAABAAAAAAAAAANdGVtcG9yYXJ5X3R0bAAAAAAAAAQAAAAA",
+    "AAAAAAAAAAAAAAAKaXNfcmVsYXllcgAAAAAAAQAAAAAAAAAHYWRkcmVzcwAAAAATAAAAAQAAAAE=",
+    "AAAAAAAAAAAAAAAMYWRkX3JlbGF5ZXJzAAAAAQAAAAAAAAAJYWRkcmVzc2VzAAAAAAAD6gAAABMAAAAA",
+    "AAAAAAAAAAAAAAAPcmVtb3ZlX3JlbGF5ZXJzAAAAAAEAAAAAAAAACWFkZHJlc3NlcwAAAAAAA+oAAAATAAAAAA==",
+    "AAAAAAAAAAAAAAAFcmVsYXkAAAAAAAAEAAAAAAAAAARmcm9tAAAAEwAAAAAAAAAMc3ltYm9sX3JhdGVzAAAD6gAAA+0AAAACAAAAEQAAAAYAAAAAAAAADHJlc29sdmVfdGltZQAAAAYAAAAAAAAACnJlcXVlc3RfaWQAAAAAAAYAAAAA",
+    "AAAAAAAAAAAAAAALZm9yY2VfcmVsYXkAAAAAAwAAAAAAAAAMc3ltYm9sX3JhdGVzAAAD6gAAA+0AAAACAAAAEQAAAAYAAAAAAAAADHJlc29sdmVfdGltZQAAAAYAAAAAAAAACnJlcXVlc3RfaWQAAAAAAAYAAAAA",
+    "AAAAAAAAAAAAAAAGZGVsaXN0AAAAAAABAAAAAAAAAAdzeW1ib2xzAAAAA+oAAAARAAAAAA==",
+    "AAAAAAAAAAAAAAAMZ2V0X3JlZl9kYXRhAAAAAQAAAAAAAAAHc3ltYm9scwAAAAPqAAAAEQAAAAEAAAPpAAAD6gAAB9AAAAAIUmVmRGF0dW0AAAfQAAAAFlN0YW5kYXJkUmVmZXJlbmNlRXJyb3IAAA==",
+    "AAAAAAAAAAAAAAASZ2V0X3JlZmVyZW5jZV9kYXRhAAAAAAABAAAAAAAAAAxzeW1ib2xfcGFpcnMAAAPqAAAD7QAAAAIAAAARAAAAEQAAAAEAAAPpAAAD6gAAB9AAAAAOUmVmZXJlbmNlRGF0dW0AAAAAB9AAAAAWU3RhbmRhcmRSZWZlcmVuY2VFcnJvcgAA",
+    "AAAAAQAAAAAAAAAAAAAADlJlZmVyZW5jZURhdHVtAAAAAAADAAAAAAAAABFsYXN0X3VwZGF0ZWRfYmFzZQAAAAAAAAYAAAAAAAAAEmxhc3RfdXBkYXRlZF9xdW90ZQAAAAAABgAAAAAAAAAEcmF0ZQAAAAo=",
+    "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAABAAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAAAAAAAAJVFRMQ29uZmlnAAAAAAAAAQAAAAAAAAAHUmVsYXllcgAAAAABAAAAEwAAAAEAAAAAAAAAB1JlZkRhdGEAAAAAAQAAABE=",
+    "AAAAAQAAAAAAAAAAAAAACVRUTENvbmZpZwAAAAAAAAQAAAAAAAAAEmluc3RhbmNlX3RocmVzaG9sZAAAAAAABAAAAAAAAAAMaW5zdGFuY2VfdHRsAAAABAAAAAAAAAATdGVtcG9yYXJ5X3RocmVzaG9sZAAAAAAEAAAAAAAAAA10ZW1wb3JhcnlfdHRsAAAAAAAABA==",
+    "AAAAAQAAAAAAAAAAAAAACFJlZkRhdHVtAAAAAwAAAAAAAAAEcmF0ZQAAAAYAAAAAAAAACnJlcXVlc3RfaWQAAAAAAAYAAAAAAAAADHJlc29sdmVfdGltZQAAAAY="
+  ]
+}

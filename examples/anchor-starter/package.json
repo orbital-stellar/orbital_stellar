@@ -1,0 +1,38 @@
+{
+  "name": "orbital-anchor-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A runnable SEP-24/31 anchor consumer: SEP-1 discovery, SEP-10 authentication, an interactive SEP-24 deposit, and a SEP-31 cross-border send, all against a real testnet anchor.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "codegen": "orbital-codegen",
+    "codegen:check": "orbital-codegen --check",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@orbital-stellar/anchor-sdk": "^0.2.0",
+    "@stellar/stellar-sdk": "^16.4.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@orbital-stellar/abi-registry": "^0.2.0",
+    "@orbital-stellar/pulse-core": "^0.2.0",
+    "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}

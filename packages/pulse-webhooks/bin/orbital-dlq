@@ -1,0 +1,134 @@
+#!/usr/bin/env node
+
+import { readFileSync } from "node:fs";
+import { MemoryDeadLetterStore } from "../dist/MemoryDeadLetterStore.js";
+import { listDLQ, dumpDLQ, replayDLQ } from "../dist/cli.js";
+import { signWebhookPayload } from "../dist/signing.js";
+
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+
+function printVersion() {
+  console.log(pkg.version);
+  process.exit(0);
+}
+
+function printHelp(exitCode = 1) {
+  console.error(
+    `Usage: orbital-dlq <command> [options]
+
+Commands:
+  list  --url <url> [--since <ISO8601>] [--limit <n>]  List DLQ entries (in-memory)
+  dump                                                   Dump all DLQ entries (in-memory)
+  replay <id> [--secret <value>]                         Replay a DLQ entry (in-memory)
+
+Options:
+  --help, -h      Show this help message
+  --version, -v   Show version number
+
+Env:
+  ORBITAL_WEBHOOK_SECRET  Signing secret used to re-sign replayed deliveries
+                          (overridden by --secret).
+
+Note: The DLQ store is in-memory only. Entries are not persisted across restarts.
+For a persistent DLQ, use the PostgresDeadLetterStore or RedisDeadLetterStore
+from @orbital-stellar/pulse-webhooks directly.
+`,
+  );
+  process.exit(exitCode);
+}
+
+const args = process.argv.slice(2);
+
+// Handle --version and --help flags
+for (const arg of args) {
+  if (arg === "--version" || arg === "-v") {
+    printVersion();
+  }
+  if (arg === "--help" || arg === "-h") {
+    printHelp(0);
+  }
+}
+
+if (args.length < 2 || args[0] !== "dlq") {
+  printHelp(1);
+}
+
+const command = args[1];
+const store = new MemoryDeadLetterStore();
+
+async function main() {
+  switch (command) {
+    case "list": {
+      const options = {};
+      for (let i = 2; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === "--url" && i + 1 < args.length) {
+          options.url = args[++i];
+        } else if (arg === "--since" && i + 1 < args.length) {
+          options.since = args[++i];
+        } else if (arg === "--limit" && i + 1 < args.length) {
+          options.limit = parseInt(args[++i], 10);
+        } else {
+          console.error(`Unknown option ${arg}`);
+          printHelp(1);
+        }
+      }
+      await listDLQ(store, options);
+      break;
+    }
+    case "dump": {
+      await dumpDLQ(store);
+      break;
+    }
+    case "replay": {
+      const id = args[2];
+      if (!id) {
+        console.error("Missing dlq id");
+        printHelp(1);
+        return;
+      }
+
+      let secret = process.env.ORBITAL_WEBHOOK_SECRET;
+      for (let i = 3; i < args.length; i++) {
+        if (args[i] === "--secret" && i + 1 < args.length) {
+          secret = args[++i];
+        }
+      }
+
+      store.setReplayHandler(async (entry) => {
+        if (!secret) {
+          throw new Error(
+            "No signing secret configured - pass --secret or set ORBITAL_WEBHOOK_SECRET",
+          );
+        }
+
+        const payload = JSON.stringify(entry.event);
+        const timestamp = Date.now().toString();
+        const signature = signWebhookPayload(payload, timestamp, secret);
+
+        const res = await fetch(entry.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-orbital-signature": signature,
+            "x-orbital-timestamp": timestamp,
+            "x-orbital-attempt": String(entry.attempts + 1),
+          },
+          body: payload,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Replay delivery failed: HTTP ${res.status}`);
+        }
+      });
+
+      await replayDLQ(store, id);
+      break;
+    }
+    default:
+      console.error(`Unknown subcommand ${command}`);
+      printHelp(1);
+  }
+}
+
+await main();

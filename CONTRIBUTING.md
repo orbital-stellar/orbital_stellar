@@ -11,6 +11,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 - [Coding standards](#coding-standards)
 - [Testing](#testing)
 - [Opening a pull request](#opening-a-pull-request)
+- [The custody gate](#the-custody-gate)
 - [Stellar Wave Program](#stellar-wave-program)
 - [Adding yourself to the contributors list](#adding-yourself-to-the-contributors-list)
 
@@ -27,7 +28,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 ## Setting up the repo
 
 ```bash
-git clone https://github.com/determined-001/orbital_stellar.git
+git clone https://github.com/orbital-stellar/orbital_stellar.git
 cd orbital_stellar
 pnpm install
 ```
@@ -106,13 +107,40 @@ pnpm --filter orbital/web dev
 
 ---
 
+## Regenerating Horizon API types
+
+The raw Horizon response types in `packages/pulse-core/src/_raw-horizon.gen.ts` are
+auto-generated from the [Stellar Horizon OpenAPI description](https://github.com/stellar/stellar-docs/tree/main/openapi/horizon).
+The source URL and revision are pinned in the script header.
+
+**To regenerate:**
+
+```bash
+pnpm generate:horizon-types
+```
+
+This fetches the latest bundled OpenAPI YAML and runs `openapi-typescript` to produce
+the updated type definitions. CI will fail if the committed output is stale, so run
+this command whenever Horizon's API changes (or when CI tells you to).
+
+The generated file (`_raw-horizon.gen.ts`) is marked DO NOT EDIT. All edits to raw
+Horizon types must go through `raw-horizon.ts`, which re-exports the generated types
+and maintains backward-compatible hand-written interfaces.
+
+---
+
 ## Testing
 
 All packages use [Vitest](https://vitest.dev). Tests live in `packages/<name>/test/`.
 
 - Write a test for every new public API.
 - Update existing tests when you change behaviour.
-- Coverage is tracked with `@vitest/coverage-v8`. Run `pnpm --filter @orbital-stellar/pulse-core test:coverage` to generate a report.
+- Coverage is tracked with `@vitest/coverage-v8`. Run `pnpm --filter @orbital-stellar/pulse-core test:coverage` to generate a report. Every package enforces a coverage floor via Vitest thresholds - CI fails if coverage drops below the floor. The per-package floors are documented in each `vitest.config.ts`.
+
+To run coverage across all packages:
+```bash
+pnpm -r --if-present test:coverage
+```
 
 CI runs tests on Node 20 and Node 22. Make sure your changes pass on both.
 
@@ -134,6 +162,62 @@ PRs that change public APIs require a description of the migration path. Breakin
 
 ---
 
+## The custody gate
+
+If your change touches `packages/worker-core/`,
+`contracts/payroll/`, `contracts/registry/`, `packages/pulse-core/` or
+`scripts/`, a CI job called **Custody gate** runs against it.
+
+It enforces one rule, **§C.2 rule 3**:
+
+> A design that requires a worker to hold signing authority over a user's
+> account is a design bug, not a feature.
+
+A worker's power is limited to "call a constrained function", never "decide
+where money goes". If a worker holds the key, what we are shipping is custody
+wearing a different name. The reasoning, and the vault pattern to use instead,
+are in [docs/design/workers.md](docs/design/workers.md#c2-no-user-custody).
+
+### Running it yourself
+
+Dependency-free, so it needs no install:
+
+```bash
+node scripts/check-no-user-custody.mjs                    # everything covered
+node scripts/check-no-user-custody.mjs --base origin/main # just your changes
+```
+
+It flags two things and nothing else: a **field declaration** whose name pairs a
+user-ish owner (`user`, `subscriber`, `depositor`, `customer`, `client`,
+`owner`) with key material (`secret`, `seed`, `keypair`, `private_key`,
+`signing_key`, `mnemonic`), and a **literal Stellar secret seed**. Comments,
+prose and text inside strings are not matched — writing "never store a user
+secret" in a doc comment does not fail anything.
+
+### It is advisory, and that is deliberate
+
+The gate is **not** a required check and must not be added to the required-checks
+set in branch protection. If it fires on something that is genuinely fine, a
+reviewer confirms it and applies the **`custody-reviewed`** label, which makes
+the job pass.
+
+That way a false positive can never wedge the repo, and clearing one always
+leaves a record of who decided it was fine — which is the part a `// eslint-
+disable`-style inline escape hatch would throw away.
+
+### Adding a covered path
+
+Two places, and both are needed:
+
+1. `COVERED` in `scripts/check-no-user-custody.mjs`
+2. `paths:` in `.github/workflows/custody-gate.yml`
+
+Miss the second and the gate simply never runs on that path — the exact failure
+[#1026](https://github.com/orbital-stellar/orbital_stellar/issues/1026) records
+for `contracts/`, `data/` and `scripts/` in `ci.yml`.
+
+---
+
 ## Stellar Wave Program
 
 Orbital participates in the [Drips Stellar Wave Program](https://drips.network). Issues tagged `Stellar Wave` are eligible for point rewards.
@@ -145,6 +229,8 @@ Orbital participates in the [Drips Stellar Wave Program](https://drips.network).
 | `complexity:trivial` | 100 |
 | `complexity:medium` | 150 |
 | `complexity:high` | 200 |
+
+**Frozen-scope eligibility.** Issues targeting scope frozen in [ROADMAP.md's Frozen section](./ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven) — `@orbital-stellar/payments`, `@orbital-stellar/auth`, identity, `x402`, `agent-sdk`, the intent compiler, shadow-fork, reactor contracts, `@orbital-stellar/analytics`, and "10+ SEPs" meta-work — are not eligible for Wave points. In-flight frozen-scope work as of the 2026-07-16 roadmap refocus is honored in full per the `grace-window` comment on the affected issue or PR; new work against frozen scope will not be accepted. Going forward, the highest-point areas are the roadmap's Phase 2 items (SEP draft, `orbital codegen`, semantic layer, hosted registry) and Phase 3 (`@orbital-stellar/anchor-sdk`).
 
 **To claim an issue:**
 1. Comment on the issue to signal intent.
@@ -194,6 +280,6 @@ Edit `.all-contributorsrc`, add an entry under `"contributors"` with your GitHub
 
 ### What the table represents
 
-The curated table in the README is the **all-contributors** set - explicitly recognized contributions across every category. It is not the same as the full git author list. For the complete commit history including everyone who has ever pushed code, see the [GitHub contributor graph](https://github.com/determined-001/orbital_stellar/graphs/contributors).
+The curated table in the README is the **all-contributors** set - explicitly recognized contributions across every category. It is not the same as the full git author list. For the complete commit history including everyone who has ever pushed code, see the [GitHub contributor graph](https://github.com/orbital-stellar/orbital_stellar/graphs/contributors).
 
 If you contributed before all-contributors was adopted (`v0.1.0` release timeframe) and your name is in the git history but not the table, please open an issue or comment on a PR with your preferred GitHub login - we will add you.

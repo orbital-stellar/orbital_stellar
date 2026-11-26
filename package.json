@@ -16,7 +16,9 @@
     "format:all": "prettier --write \"packages/**/*.{ts,tsx,json}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,json}\"",
     "docs:reference": "node scripts/generate-reference-docs.mjs",
+    "docs:generate-open-data": "node scripts/generate-open-data.mjs",
     "docs:check-tsdoc": "node scripts/check-tsdoc-coverage.mjs",
+    "generate:horizon-types": "node scripts/generate-horizon-types.mjs",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -24,12 +26,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.6.0",
+    "@orbital-stellar/abi-registry": "workspace:*",
+    "@stellar/stellar-sdk": "^16.4.1",
+    "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.8",
-    "prettier": "^3.9.4",
+    "lint-staged": "^17.5.1",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.1"
+    "typescript-eslint": "^8.70.0"
   }
 }

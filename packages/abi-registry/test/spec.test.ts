@@ -206,7 +206,7 @@ describe("spec.schema.json", () => {
     expect(required).toContain("types");
   });
 
-  it("enumerates all 14 Soroban primitive types in PrimitiveType", () => {
+  it("enumerates all 16 Soroban primitive types in PrimitiveType", () => {
     const defs = specSchema["$defs"] as Record<string, unknown>;
     const primitive = defs["PrimitiveType"] as Record<string, unknown>;
     const enumValues = primitive["enum"] as string[];
@@ -225,6 +225,14 @@ describe("spec.schema.json", () => {
       "symbol",
       "address",
       "void",
+      // The generic scvError slot. Present in spec.ts's PrimitiveType since it
+      // was added for Result<T, Error>'s error arm; spec.schema.json had been
+      // left behind, so a spec using it passed validateSpec but failed the
+      // schema.
+      "error",
+      // The generic scvVal slot (an argument or return of any ScVal type).
+      // Real and common: DeFindex strategies take Vec<Val> init args.
+      "val",
     ];
     expect(enumValues).toHaveLength(expected.length);
     expected.forEach((p) => expect(enumValues).toContain(p));

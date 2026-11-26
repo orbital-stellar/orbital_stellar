@@ -1,0 +1,115 @@
+{
+  "contractId": "CACZ3GBAKUPIAFRILUFO27J5RUH5GJ2VSJ46LP6GJYSKGDRTQ5MS3HCH",
+  "description": "Pyth Network's Pyth Pro (formerly Pyth Lazer) price feed contract on Stellar mainnet: verifies signed Pyth price updates against the trusted signer set and returns the verified payload. Lending and RWA protocols on Stellar read Pyth prices through it.",
+  "events": [],
+  "functions": [
+    {
+      "doc": "Upgrade the contract WASM. Callable only by the executor.",
+      "name": "upgrade",
+      "params": [{ "name": "new_wasm_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": {
+        "err": { "name": "ContractError", "type": "named" },
+        "ok": "void",
+        "type": "result"
+      }
+    },
+    {
+      "doc": "Constructor. Stores the executor address (the Wormhole executor\ncontract authorized for governance operations).\n\nOptionally accepts an initial trusted signer and expiry. This avoids\nneeding a governance VAA for the very first signer during deployment.",
+      "name": "__constructor",
+      "params": [
+        { "name": "executor", "type": "address" },
+        {
+          "name": "initial_signer",
+          "type": { "inner": { "size": 33, "type": "bytes_n" }, "type": "option" }
+        },
+        { "name": "initial_signer_expires_at", "type": { "inner": "u64", "type": "option" } }
+      ],
+      "returns": {
+        "err": { "name": "ContractError", "type": "named" },
+        "ok": "void",
+        "type": "result"
+      }
+    },
+    {
+      "doc": "Verify an LE-ECDSA signed Pyth Lazer update.\n\nParses the envelope, recovers the signer's public key, checks it against\ntrusted signers, validates expiry, and returns the verified payload bytes.\n\nVerification is stateless: it proves the payload was signed by a\ncurrently trusted signer, but does not prevent replay of an update or\norder updates by arrival. Callers must deduplicate updates and enforce\nfreshness using the `timestamp` field of the verified payload (and,\nwhere relevant, the per-feed `feed_update_timestamp`) — never the\nenvelope bytes, the signature, or a hash of either.",
+      "name": "verify_update",
+      "params": [{ "name": "data", "type": "bytes" }],
+      "returns": {
+        "err": { "name": "ContractError", "type": "named" },
+        "ok": "bytes",
+        "type": "result"
+      }
+    },
+    {
+      "doc": "List every currently trusted signer as `(pubkey, expires_at)` pairs.\nRead-only; readable by anyone.",
+      "name": "list_trusted_signers",
+      "params": [],
+      "returns": {
+        "item": { "elements": [{ "size": 33, "type": "bytes_n" }, "u64"], "type": "tuple" },
+        "type": "vec"
+      }
+    },
+    {
+      "doc": "Add, update, or remove a trusted signer. Callable only by the executor.\nSetting `expires_at` to 0 removes the signer.",
+      "name": "update_trusted_signer",
+      "params": [
+        { "name": "pubkey", "type": { "size": 33, "type": "bytes_n" } },
+        { "name": "expires_at", "type": "u64" }
+      ],
+      "returns": {
+        "err": { "name": "ContractError", "type": "named" },
+        "ok": "void",
+        "type": "result"
+      }
+    }
+  ],
+  "name": "Pyth Pro Verifier",
+  "network": "mainnet",
+  "types": {
+    "ContractError": {
+      "kind": "enum",
+      "name": "ContractError",
+      "variants": [
+        { "discriminant": 1, "name": "AlreadyInitialized" },
+        { "discriminant": 2, "name": "NotInitialized" },
+        { "discriminant": 3, "name": "InvalidMagic" },
+        { "discriminant": 4, "name": "TruncatedData" },
+        { "discriminant": 5, "name": "InvalidPayloadLength" },
+        { "discriminant": 6, "name": "SignerNotTrusted" },
+        { "discriminant": 7, "name": "SignerExpired" },
+        { "discriminant": 8, "name": "Unauthorized" },
+        { "discriminant": 9, "name": "InvalidPayloadMagic" },
+        { "discriminant": 10, "name": "InvalidChannel" },
+        { "discriminant": 11, "name": "InvalidProperty" },
+        { "discriminant": 12, "name": "InvalidMarketSession" },
+        { "discriminant": 13, "name": "InvalidRecoveryId" }
+      ]
+    },
+    "DataKey": {
+      "cases": [
+        {
+          "doc": "The executor address authorized for governance operations.",
+          "fields": [],
+          "name": "Executor"
+        },
+        {
+          "doc": "The full set of trusted signers, stored as a single enumerable map from\ncompressed secp256k1 pubkey to expiry timestamp (unix seconds). A single\nmap (rather than one storage entry per signer) lets the whole set be\nlisted on-chain.",
+          "fields": [],
+          "name": "TrustedSigners"
+        }
+      ],
+      "kind": "union",
+      "name": "DataKey"
+    }
+  },
+  "version": "0.0.0",
+  "xdrEntries": [
+    "AAAAAAAAADlVcGdyYWRlIHRoZSBjb250cmFjdCBXQVNNLiBDYWxsYWJsZSBvbmx5IGJ5IHRoZSBleGVjdXRvci4AAAAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAABAAAD6QAAAAIAAAfQAAAADUNvbnRyYWN0RXJyb3IAAAA=",
+    "AAAAAAAAAPtDb25zdHJ1Y3Rvci4gU3RvcmVzIHRoZSBleGVjdXRvciBhZGRyZXNzICh0aGUgV29ybWhvbGUgZXhlY3V0b3IKY29udHJhY3QgYXV0aG9yaXplZCBmb3IgZ292ZXJuYW5jZSBvcGVyYXRpb25zKS4KCk9wdGlvbmFsbHkgYWNjZXB0cyBhbiBpbml0aWFsIHRydXN0ZWQgc2lnbmVyIGFuZCBleHBpcnkuIFRoaXMgYXZvaWRzCm5lZWRpbmcgYSBnb3Zlcm5hbmNlIFZBQSBmb3IgdGhlIHZlcnkgZmlyc3Qgc2lnbmVyIGR1cmluZyBkZXBsb3ltZW50LgAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAMAAAAAAAAACGV4ZWN1dG9yAAAAEwAAAAAAAAAOaW5pdGlhbF9zaWduZXIAAAAAA+gAAAPuAAAAIQAAAAAAAAAZaW5pdGlhbF9zaWduZXJfZXhwaXJlc19hdAAAAAAAA+gAAAAGAAAAAQAAA+kAAAACAAAH0AAAAA1Db250cmFjdEVycm9yAAAA",
+    "AAAAAAAAAkxWZXJpZnkgYW4gTEUtRUNEU0Egc2lnbmVkIFB5dGggTGF6ZXIgdXBkYXRlLgoKUGFyc2VzIHRoZSBlbnZlbG9wZSwgcmVjb3ZlcnMgdGhlIHNpZ25lcidzIHB1YmxpYyBrZXksIGNoZWNrcyBpdCBhZ2FpbnN0CnRydXN0ZWQgc2lnbmVycywgdmFsaWRhdGVzIGV4cGlyeSwgYW5kIHJldHVybnMgdGhlIHZlcmlmaWVkIHBheWxvYWQgYnl0ZXMuCgpWZXJpZmljYXRpb24gaXMgc3RhdGVsZXNzOiBpdCBwcm92ZXMgdGhlIHBheWxvYWQgd2FzIHNpZ25lZCBieSBhCmN1cnJlbnRseSB0cnVzdGVkIHNpZ25lciwgYnV0IGRvZXMgbm90IHByZXZlbnQgcmVwbGF5IG9mIGFuIHVwZGF0ZSBvcgpvcmRlciB1cGRhdGVzIGJ5IGFycml2YWwuIENhbGxlcnMgbXVzdCBkZWR1cGxpY2F0ZSB1cGRhdGVzIGFuZCBlbmZvcmNlCmZyZXNobmVzcyB1c2luZyB0aGUgYHRpbWVzdGFtcGAgZmllbGQgb2YgdGhlIHZlcmlmaWVkIHBheWxvYWQgKGFuZCwKd2hlcmUgcmVsZXZhbnQsIHRoZSBwZXItZmVlZCBgZmVlZF91cGRhdGVfdGltZXN0YW1wYCkg4oCUIG5ldmVyIHRoZQplbnZlbG9wZSBieXRlcywgdGhlIHNpZ25hdHVyZSwgb3IgYSBoYXNoIG9mIGVpdGhlci4AAAANdmVyaWZ5X3VwZGF0ZQAAAAAAAAEAAAAAAAAABGRhdGEAAAAOAAAAAQAAA+kAAAAOAAAH0AAAAA1Db250cmFjdEVycm9yAAAA",
+    "AAAAAAAAAGNMaXN0IGV2ZXJ5IGN1cnJlbnRseSB0cnVzdGVkIHNpZ25lciBhcyBgKHB1YmtleSwgZXhwaXJlc19hdClgIHBhaXJzLgpSZWFkLW9ubHk7IHJlYWRhYmxlIGJ5IGFueW9uZS4AAAAAFGxpc3RfdHJ1c3RlZF9zaWduZXJzAAAAAAAAAAEAAAPqAAAD7QAAAAIAAAPuAAAAIQAAAAY=",
+    "AAAAAAAAAHVBZGQsIHVwZGF0ZSwgb3IgcmVtb3ZlIGEgdHJ1c3RlZCBzaWduZXIuIENhbGxhYmxlIG9ubHkgYnkgdGhlIGV4ZWN1dG9yLgpTZXR0aW5nIGBleHBpcmVzX2F0YCB0byAwIHJlbW92ZXMgdGhlIHNpZ25lci4AAAAAAAAVdXBkYXRlX3RydXN0ZWRfc2lnbmVyAAAAAAAAAgAAAAAAAAAGcHVia2V5AAAAAAPuAAAAIQAAAAAAAAAKZXhwaXJlc19hdAAAAAAABgAAAAEAAAPpAAAAAgAAB9AAAAANQ29udHJhY3RFcnJvcgAAAA==",
+    "AAAABAAAAAAAAAAAAAAADUNvbnRyYWN0RXJyb3IAAAAAAAANAAAAAAAAABJBbHJlYWR5SW5pdGlhbGl6ZWQAAAAAAAEAAAAAAAAADk5vdEluaXRpYWxpemVkAAAAAAACAAAAAAAAAAxJbnZhbGlkTWFnaWMAAAADAAAAAAAAAA1UcnVuY2F0ZWREYXRhAAAAAAAABAAAAAAAAAAUSW52YWxpZFBheWxvYWRMZW5ndGgAAAAFAAAAAAAAABBTaWduZXJOb3RUcnVzdGVkAAAABgAAAAAAAAANU2lnbmVyRXhwaXJlZAAAAAAAAAcAAAAAAAAADFVuYXV0aG9yaXplZAAAAAgAAAAAAAAAE0ludmFsaWRQYXlsb2FkTWFnaWMAAAAACQAAAAAAAAAOSW52YWxpZENoYW5uZWwAAAAAAAoAAAAAAAAAD0ludmFsaWRQcm9wZXJ0eQAAAAALAAAAAAAAABRJbnZhbGlkTWFya2V0U2Vzc2lvbgAAAAwAAAAAAAAAEUludmFsaWRSZWNvdmVyeUlkAAAAAAAADQ==",
+    "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAAAgAAAAAAAAA6VGhlIGV4ZWN1dG9yIGFkZHJlc3MgYXV0aG9yaXplZCBmb3IgZ292ZXJuYW5jZSBvcGVyYXRpb25zLgAAAAAACEV4ZWN1dG9yAAAAAAAAAOZUaGUgZnVsbCBzZXQgb2YgdHJ1c3RlZCBzaWduZXJzLCBzdG9yZWQgYXMgYSBzaW5nbGUgZW51bWVyYWJsZSBtYXAgZnJvbQpjb21wcmVzc2VkIHNlY3AyNTZrMSBwdWJrZXkgdG8gZXhwaXJ5IHRpbWVzdGFtcCAodW5peCBzZWNvbmRzKS4gQSBzaW5nbGUKbWFwIChyYXRoZXIgdGhhbiBvbmUgc3RvcmFnZSBlbnRyeSBwZXIgc2lnbmVyKSBsZXRzIHRoZSB3aG9sZSBzZXQgYmUKbGlzdGVkIG9uLWNoYWluLgAAAAAADlRydXN0ZWRTaWduZXJzAAA="
+  ]
+}

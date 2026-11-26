@@ -1,3 +1,4 @@
+/** Brand used for Stellar amount strings that have already been validated. */
 export type StellarAmount = string & { __brand: "StellarAmount" };
 
 /**
@@ -38,4 +39,18 @@ export function toBigInt(amount: StellarAmount): bigint {
   const fracBig = BigInt(padded);
   const combined = wholeBig * 10000000n + fracBig;
   return negative ? -combined : combined;
+}
+
+/**
+ * Convert a stroop-precision integer (amount * 10^7) into a Stellar decimal
+ * amount string (e.g. `1000.0000000`), matching the fixed 7-decimal-place
+ * format Horizon returns for classic amounts. Inverse of {@link toBigInt}.
+ */
+export function fromBigInt(amount: bigint): StellarAmount {
+  const negative = amount < 0n;
+  const abs = negative ? -amount : amount;
+  const whole = abs / 10000000n;
+  const frac = abs % 10000000n;
+  const s = `${negative ? "-" : ""}${whole}.${frac.toString().padStart(7, "0")}`;
+  return toStellarAmount(s);
 }

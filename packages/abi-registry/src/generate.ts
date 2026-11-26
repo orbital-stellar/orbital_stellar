@@ -2,9 +2,23 @@ import { xdr } from "@stellar/stellar-sdk";
 import type { XdrContractSpec } from "./types.js";
 import type { ContractSpec, EventSpec, FunctionSpec, TypeSpec, UserDefinedType } from "./spec.js";
 
+/**
+ * Generated TypeScript artifacts for a contract spec.
+ *
+ * Each field is a standalone source string (or `undefined` when the
+ * corresponding artifact is not produced for the given spec):
+ * - `declarations`: type/interface declarations (and imports)
+ * - `schemas`: Zod schemas matching the declarations
+ * - `guards`: event type guards and the `ContractEventUnion` helper
+ * - `testDts`: a `.d.ts`-style exhaustiveness test scaffold
+ * - `hooks`: React hook wrappers, only when the spec declares events
+ */
 export type GeneratedContractArtifacts = {
   declarations: string;
   schemas: string;
+  guards?: string;
+  testDts?: string;
+  hooks?: string;
 };
 
 function toPascalCase(value: string): string {
@@ -146,6 +160,12 @@ function generateFromXdrContractSpec(spec: XdrContractSpec): GeneratedContractAr
   declarations.push('import { z } from "zod";');
   declarations.push("");
 
+  const guards: string[] = [];
+  const testDts: string[] = [];
+  const eventTypes: string[] = [];
+
+  declarations.unshift('import type { ContractEmittedEvent } from "@orbital-stellar/pulse-core";');
+
   for (const event of entries) {
     const eventName = String((event as any).name());
     const baseName = toPascalCase(eventName);
@@ -173,11 +193,65 @@ function generateFromXdrContractSpec(spec: XdrContractSpec): GeneratedContractAr
     );
     schemas.push("});");
     schemas.push("");
+
+    guards.push(
+      `export function is${interfaceName}(event: ContractEmittedEvent): event is ContractEmittedEvent & { decodedData: ${interfaceName} } {`,
+    );
+    guards.push(
+      `  return event.topics[0] === "${eventName}" && ${schemaName}.safeParse(event.decodedData).success;`,
+    );
+    guards.push(`}`);
+    guards.push("");
+
+    eventTypes.push(
+      `ContractEmittedEvent & { topics: ["${eventName}", ...string[]]; decodedData: ${interfaceName} }`,
+    );
   }
+
+  guards.push(
+    `export type ContractEventUnion = ${eventTypes.length > 0 ? eventTypes.join(" | ") : "never"};`,
+  );
+  guards.push("");
+
+  guards.push(`export function assertExhaustiveContractEvent(event: ContractEventUnion): string {`);
+  guards.push(`  switch (event.topics[0]) {`);
+  for (const event of entries) {
+    guards.push(`    case "${String((event as any).name())}":`);
+    guards.push(`      return event.topics[0];`);
+  }
+  if (entries.length > 0) {
+    guards.push(`    default: {`);
+    guards.push(`      const _exhaustive: never = event.topics[0];`);
+    guards.push(`      return _exhaustive;`);
+    guards.push(`    }`);
+  }
+  guards.push(`  }`);
+  guards.push(`}`);
+  guards.push("");
+
+  testDts.push(`import type { ContractEventUnion } from "./generated.js";`);
+  testDts.push("");
+  testDts.push(`export function assertExhaustive(event: ContractEventUnion): string {`);
+  testDts.push(`  switch (event.topics[0]) {`);
+  for (const event of entries) {
+    testDts.push(`    case "${String((event as any).name())}":`);
+    testDts.push(`      return event.topics[0];`);
+  }
+  if (entries.length > 0) {
+    testDts.push(`    default: {`);
+    testDts.push(`      const _exhaustive: never = event.topics[0];`);
+    testDts.push(`      return _exhaustive;`);
+    testDts.push(`    }`);
+  }
+  testDts.push(`  }`);
+  testDts.push(`}`);
+  testDts.push("");
 
   return {
     declarations: declarations.join("\n"),
     schemas: schemas.join("\n"),
+    guards: guards.join("\n"),
+    testDts: testDts.join("\n"),
   };
 }
 
@@ -213,6 +287,8 @@ function mapContractSpecTypeToTs(type: TypeSpec): string {
       case "address":
         return "string";
       case "error":
+        return "unknown";
+      case "val":
         return "unknown";
     }
   }
@@ -257,6 +333,8 @@ function mapContractSpecTypeToZod(type: TypeSpec): string {
       case "address":
         return "z.string()";
       case "error":
+        return "z.unknown()";
+      case "val":
         return "z.unknown()";
     }
   }
@@ -362,10 +440,15 @@ function generateFunctionDeclarations(functions: ReadonlyArray<FunctionSpec>): s
 function generateEventDeclarations(events: ReadonlyArray<EventSpec>): {
   declarations: string[];
   schemas: string[];
+  guards: string[];
+  testDts: string[];
 } {
   const usedNames = new Set<string>();
   const declarations: string[] = [];
   const schemas: string[] = [];
+  const guards: string[] = [];
+  const testDts: string[] = [];
+  const eventTypes: string[] = [];
 
   for (const event of events) {
     const baseName = toPascalCase(event.name);
@@ -385,9 +468,118 @@ function generateEventDeclarations(events: ReadonlyArray<EventSpec>): {
     );
     schemas.push("});");
     schemas.push("");
+
+    guards.push(
+      `export function is${interfaceName}(event: ContractEmittedEvent): event is ContractEmittedEvent & { decodedData: ${interfaceName} } {`,
+    );
+    guards.push(
+      `  return event.topics[0] === "${event.name}" && ${schemaName}.safeParse(event.decodedData).success;`,
+    );
+    guards.push(`}`);
+    guards.push("");
+
+    eventTypes.push(
+      `ContractEmittedEvent & { topics: ["${event.name}", ...string[]]; decodedData: ${interfaceName} }`,
+    );
   }
 
-  return { declarations, schemas };
+  guards.push(
+    `export type ContractEventUnion = ${eventTypes.length > 0 ? eventTypes.join(" | ") : "never"};`,
+  );
+  guards.push("");
+
+  guards.push(`export function assertExhaustiveContractEvent(event: ContractEventUnion): string {`);
+  guards.push(`  switch (event.topics[0]) {`);
+  for (const event of events) {
+    guards.push(`    case "${event.name}":`);
+    guards.push(`      return event.topics[0];`);
+  }
+  if (events.length > 0) {
+    guards.push(`    default: {`);
+    guards.push(`      const _exhaustive: never = event.topics[0];`);
+    guards.push(`      return _exhaustive;`);
+    guards.push(`    }`);
+  }
+  guards.push(`  }`);
+  guards.push(`}`);
+  guards.push("");
+
+  testDts.push(`import type { ContractEventUnion } from "./generated.js";`);
+  testDts.push("");
+  testDts.push(`export function assertExhaustive(event: ContractEventUnion): string {`);
+  testDts.push(`  switch (event.topics[0]) {`);
+  for (const event of events) {
+    testDts.push(`    case "${event.name}":`);
+    testDts.push(`      return event.topics[0];`);
+  }
+  if (events.length > 0) {
+    testDts.push(`    default: {`);
+    testDts.push(`      const _exhaustive: never = event.topics[0];`);
+    testDts.push(`      return _exhaustive;`);
+    testDts.push(`    }`);
+  }
+  testDts.push(`  }`);
+  testDts.push(`}`);
+  testDts.push("");
+
+  return { declarations, schemas, guards, testDts };
+}
+
+function generateReactHooks(events: ReadonlyArray<EventSpec>): string[] {
+  if (events.length === 0) return [];
+  const hooks: string[] = [];
+  const usedNames = new Set<string>();
+
+  hooks.push("// ─── React hooks generated from contract event schema ─────────────");
+  hooks.push("//");
+  hooks.push("// These hooks wrap useContractEvent with the correct Zod-validated");
+  hooks.push("// types so consumers get fully typed events without manual narrowing.");
+  hooks.push("//");
+  hooks.push("// @ts-expect-error - useContractEvent is resolved at the consumer side");
+  hooks.push('import { useContractEvent } from "@orbital-stellar/pulse-notify";');
+  hooks.push("");
+
+  for (const event of events) {
+    const baseName = toPascalCase(event.name);
+    const interfaceName = ensureUniqueName(`${baseName}Event`, usedNames);
+    const schemaName = `${interfaceName}Schema`;
+    const hookName = `use${baseName}`;
+
+    hooks.push("/**");
+    hooks.push(` * React hook that subscribes to \`${event.name}\` events.`);
+    hooks.push(` * The returned event is validated against \`${schemaName}\` at runtime.`);
+    hooks.push(" */");
+    hooks.push(`export function ${hookName}(`);
+    hooks.push("  config: {");
+    hooks.push("    serverUrl: string;");
+    hooks.push("    contractId: string;");
+    hooks.push("    token?: string;");
+    hooks.push("    tokenProvider?: () => Promise<string>;");
+    hooks.push("    filter?: (event: unknown) => boolean;");
+    hooks.push("    withCredentials?: boolean;");
+    hooks.push("    hideAfterMs?: number;");
+    hooks.push("  },");
+    hooks.push(
+      `): { event: ${interfaceName} | null; connected: boolean; error: string | null; lastEventAt: string | null } {`,
+    );
+    hooks.push("  const result = useContractEvent({");
+    hooks.push("    ...config,");
+    hooks.push("    topics: [],");
+    hooks.push("  });");
+    hooks.push("");
+    hooks.push("  // Validate the event payload against the generated schema");
+    hooks.push("  if (result.event && result.event.type === 'contract.emitted') {");
+    hooks.push(`    const parsed = ${schemaName}.safeParse(result.event.data);`);
+    hooks.push("    if (parsed.success) {");
+    hooks.push(`      return { ...result, event: parsed.data as unknown as ${interfaceName} };`);
+    hooks.push("    }");
+    hooks.push("  }");
+    hooks.push(`  return { ...result, event: null as unknown as ${interfaceName} };`);
+    hooks.push("}");
+    hooks.push("");
+  }
+
+  return hooks;
 }
 
 function generateFromContractSpec(spec: ContractSpec): GeneratedContractArtifacts {
@@ -401,15 +593,42 @@ function generateFromContractSpec(spec: ContractSpec): GeneratedContractArtifact
   declarations.push(...generateFunctionDeclarations(spec.functions));
 
   const events = generateEventDeclarations(spec.events);
+  // The event guards/union below reference `ContractEmittedEvent` - without
+  // this import present whenever a spec declares at least one event, the
+  // generated file doesn't compile. `generateFromXdrContractSpec` (the raw-
+  // XDR sibling of this function) already does this; specs resolved from the
+  // registry, well-known bundle, or WASM discovery all go through *this*
+  // path via `generateContractArtifacts`, so it needs the same import.
+  if (spec.events.length > 0) {
+    declarations.unshift(
+      'import type { ContractEmittedEvent } from "@orbital-stellar/pulse-core";',
+    );
+  }
   declarations.push(...events.declarations);
   schemas.push(...events.schemas);
+
+  const hooks = generateReactHooks(spec.events);
 
   return {
     declarations: declarations.join("\n"),
     schemas: schemas.join("\n"),
+    guards: events.guards.join("\n"),
+    testDts: events.testDts.join("\n"),
+    hooks: hooks.length > 0 ? hooks.join("\n") : undefined,
   };
 }
 
+/**
+ * Generates TypeScript declarations, Zod schemas, event guards and (when
+ * applicable) React hooks for the given contract spec.
+ *
+ * Accepts either a structured {@link ContractSpec} (registry / well-known
+ * bundle / WASM discovery) or a raw {@link XdrContractSpec} (base64 XDR
+ * entries, events only).
+ *
+ * @param spec - The contract spec to generate artifacts for.
+ * @returns The generated artifacts as source strings.
+ */
 export function generateContractArtifacts(
   spec: XdrContractSpec | ContractSpec,
 ): GeneratedContractArtifacts {
@@ -418,7 +637,28 @@ export function generateContractArtifacts(
     : generateFromContractSpec(spec);
 }
 
+/**
+ * Generates a single TypeScript source string containing the declarations,
+ * Zod schemas and event guards for the given contract spec.
+ *
+ * @param spec - The contract spec to generate types for.
+ * @returns The combined TypeScript source, with sections separated by blank lines.
+ */
 export function generateContractTypes(spec: XdrContractSpec | ContractSpec): string {
   const artifacts = generateContractArtifacts(spec);
-  return [artifacts.declarations, artifacts.schemas].filter(Boolean).join("\n\n");
+  return [artifacts.declarations, artifacts.schemas, artifacts.guards].filter(Boolean).join("\n\n");
+}
+
+/**
+ * Generates React hook wrappers (e.g. `useSwapExecuted()`) for every event
+ * in the contract spec. Returns an empty string if the spec has no events
+ * or is an XDR contract spec (which lacks structured event specs).
+ *
+ * @param spec - The contract spec to generate hooks for.
+ * @returns The generated hook source, or an empty string when no hooks apply.
+ */
+export function generateContractHooks(spec: XdrContractSpec | ContractSpec): string {
+  if (isXdrContractSpec(spec)) return "";
+  const hooks = generateReactHooks(spec.events);
+  return hooks.join("\n");
 }

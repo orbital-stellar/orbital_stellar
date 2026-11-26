@@ -44,9 +44,10 @@ section below, not on the active roadmap.
 | Phase | Theme | Tag | Target gate | Status |
 |---|---|---|---|---|
 | **Phase 0 - Foundation** | Typed SDKs for Stellar classic operations | `v0.1.0` | `pnpm -r typecheck && pnpm test` green; tag pushed; CHANGELOG entry shipped | 🟢 **Released 2026-05-29** |
-| **Phase 1 - Production SDK** | Soroban + cursor persistence + stability pledge | `v1.0.0` | `pnpm publish -r --filter "./packages/*"` succeeds; STABILITY.md merged; Soroban e2e test green | 🟡 **In progress** - STABILITY.md merged (this PR); starter boilerplates + `v1.0.0` tag outstanding |
-| **Phase 2 - The Decoding Standard** | SEP draft, `orbital codegen`, semantic layer, hosted registry | `v1.x` | SEP draft submitted; `orbital codegen` published and used in all three starter boilerplates; ≥25 contracts with registered verified schemas; hosted registry serving reads in production | ⚪ 2026 H2 |
-| **Phase 3 - Anchor Events** | SEP-24/31 lifecycle events, `@orbital-stellar/anchor-sdk` | `v2.0.0` | `@orbital-stellar/anchor-sdk` on npm; SEP-24 + SEP-31 lifecycle events normalized into the standard taxonomy; ≥1 named anchor consuming it in production | ⚪ 2027 H1 |
+| **Phase 1 - Production SDK** | Soroban + cursor persistence + stability pledge | `v1.0.0` | `pnpm publish -r --filter "./packages/*"` succeeds; STABILITY.md merged; Soroban e2e test green | 🟡 **In progress** - STABILITY.md merged, all seven packages on npm at `0.2.0`, three starter boilerplates shipped; `v1.0.0` tag outstanding |
+| **Phase 2 - The Decoding Standard** | SEP draft, `orbital codegen`, semantic layer, hosted registry | `v1.x` | SEP draft submitted; `orbital codegen` published and used in all three starter boilerplates; ≥25 contracts with registered verified schemas; hosted registry serving reads in production | 🟡 **In progress** - testnet registry live, `orbital codegen` on npm and used in all three starters, 29 verified mainnet schemas (gate: ≥25) met; SEP submission and hosted registry outstanding |
+| **Phase 3 - Anchor Events** | SEP-24/31 lifecycle events, `@orbital-stellar/anchor-sdk` | `v2.0.0` | `@orbital-stellar/anchor-sdk` on npm; SEP-24 + SEP-31 lifecycle events normalized into the standard taxonomy; ≥1 named anchor consuming it in production | 🟡 **In progress** - `@orbital-stellar/anchor-sdk@0.2.0` on npm with `anchor.*` lifecycle normalization; named production anchor outstanding |
+| **Phase 4 - Workers entry gate** | Worker layer — trigger-without-custody standard + runtime | `v3.x` | W0–W4 each reach their gate; §C.2 no-custody constraint enforced on every stage; build order hard constraint (W4 lands last) | 🟢 **W0–W3 built** — [`@orbital-stellar/worker-core@0.2.0`](https://www.npmjs.com/package/@orbital-stellar/worker-core) on npm; **W4 dropped** ([#1137](https://github.com/orbital-stellar/orbital_stellar/issues/1137)) |
 
 The former "Trust & Agent Layer" and "Protocol Permanence" phases are not
 gone - they are preserved verbatim in the
@@ -103,7 +104,7 @@ gone - they are preserved verbatim in the
 
 **Goal:** a stability-pledged `v1.0` that teams can build production systems on.
 
-**Release gate:** `pnpm publish -r --filter "./packages/*"` succeeds against npm with `version: "1.0.0"`; `STABILITY.md` merged with documented semver contract; Soroban subscription e2e test passing against testnet RPC; M1–M6 in [`docs/proposal.md`](./docs/proposal.md) all check out. Waves 1.1–1.3 below have shipped; Wave 1.4 is down to the OpenAPI-generated schemas; Wave 1.5 is down to boilerplates and the tag. Wave 1.6 does **not** gate `v1.0.0` - it is the first post-tag release (`v1.1.0`).
+**Release gate:** `pnpm publish -r --filter "./packages/*"` succeeds against npm with `version: "1.0.0"`; `STABILITY.md` merged with documented semver contract; Soroban subscription e2e test passing against testnet RPC; M1–M6 in [`docs/proposal.md`](./docs/proposal.md) all check out. Waves 1.1–1.3 below have shipped; Wave 1.4 is down to the OpenAPI-generated schemas; Wave 1.5 is down to the tag. Wave 1.6 does **not** gate `v1.0.0` - it is the first post-tag release (`v1.1.0`).
 
 ### Wave 1.1 - Soroban event subscription
 
@@ -135,11 +136,11 @@ the SEP draft.
 ### Wave 1.4 - Discriminated union refinement
 
 - [x] Narrow `NormalizedEvent` types so `switch (event.type)` produces exhaustive type narrowing with no `default` clause - enforced by `packages/pulse-core/test/types.exhaustive.test-d.ts`, run via `pnpm test:types`
-- [ ] Generated schemas from Horizon's OpenAPI
+- [x] Generated schemas from Horizon's OpenAPI - [`scripts/generate-horizon-types.mjs`](./scripts/generate-horizon-types.mjs) writes [`packages/pulse-core/src/_raw-horizon.gen.ts`](./packages/pulse-core/src/_raw-horizon.gen.ts), exported from `pulse-core` through [`raw-horizon.ts`](./packages/pulse-core/src/raw-horizon.ts)
 
 ### Wave 1.5 - Distribution
 
-- [ ] Starter boilerplates: `orbital-next-starter`, `orbital-express-starter`, `orbital-anchor-starter`
+- [x] Starter boilerplates: `orbital-next-starter`, `orbital-express-starter`, `orbital-anchor-starter` - in [`examples/`](./examples), installing from npm `0.2.0`
 - [x] `pnpm add @orbital-stellar/pulse-core` works against npm
 - [x] `STABILITY.md` - semver contract, deprecation window (6 months), breaking-change policy
 - [ ] `v1.0.0` git tag with full release notes
@@ -154,14 +155,16 @@ Orbital's classic ingestion currently rides Horizon SSE - a legacy rail. This
 wave moves asset-movement ingestion to the unified stream without changing the
 `NormalizedEvent` surface consumers see.
 
-- [ ] Ingest CAP-67 unified asset events from Stellar RPC, feeding the same
+- [x] Ingest CAP-67 unified asset events from Stellar RPC, feeding the same
   normalization pipeline as Horizon and Soroban events today
-- [ ] Map unified events onto the existing `NormalizedEvent` taxonomy -
+- [x] Map unified events onto the existing `NormalizedEvent` taxonomy -
   consumers see no behavior change; the transport underneath switches
-- [ ] RPC-first for asset-movement events; Horizon SSE remains the source for
+- [x] RPC-first for asset-movement events; Horizon SSE remains the source for
   operation types with no unified-event equivalent (offers, account options,
   claimable balances, manage_data) and the fallback transport otherwise -
-  documented in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+  documented in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Shipped in
+  `0.2.0` behind `CoreConfig.ingestion` (`"unified" | "horizon" | "auto"`,
+  default `"horizon"`) and `soroban.unifiedEvents`
 - [ ] Cursor semantics compatible with `BACKFILL_STELLAR_ASSET_EVENTS`
   retroactive history, so replay from genesis-era ledgers is possible against
   a backfilled RPC/CDP source
@@ -172,7 +175,7 @@ unchanged and green.
 
 ---
 
-## Phase 2 - The Decoding Standard (`v1.x`, 2026 H2)
+## Phase 2 - The Decoding Standard (`v1.x`, in progress)
 
 **Goal:** make the registry the canonical source of truth for what a Soroban contract's events mean - not just a convenience client.
 
@@ -184,30 +187,31 @@ The on-chain leg of the registry: a Soroban contract that makes schema
 publication verifiable, plus the indexer that keeps it populated
 automatically. This is what makes "canonical" true rather than aspirational.
 
-- [ ] **On-chain registry contract** - code complete, blocked on deployment
+- [x] **On-chain registry contract** - deployed to testnet
   - [x] Soroban contract: `publish(contract_id, version, spec_hash, pointer)`, per-version
     lookup, publisher authorization, emits a `spec_published` event
     (`contracts/registry`, 7 unit tests)
   - [x] Stores hash + pointer (not the full spec) - integrity verifiable on-chain,
     spec blobs live off-chain
-  - [ ] **Blocked on maintainer action:** deploy to testnet (needs a funded
-    testnet account) and commit `contracts/deployed.testnet.json`
+  - [x] Deployed to testnet; IDs and WASM hashes recorded in
+    [`contracts/deployed.testnet.json`](./contracts/deployed.testnet.json)
   - [ ] **Blocked on maintainer action:** wire `SOROBAN_CONTRACT_ID` +
     `SOROBAN_INVOKER_SECRET` repo secrets so the nightly integration test
     stops skipping
 - [x] `OnChainRegistryPublisher` + `OnChainAbiRegistryClient` - on-chain
   publish and resolution path, wired into pulse-core's default registry
   chain (`@orbital-stellar/abi-registry`)
-- [ ] Seed the registry with the 4 bundled well-known specs (USDC, EURC,
-  AQUA, native XLM wrapper) through the live contract - script written and
-  tested (`packages/abi-registry/scripts/seed-well-known.ts`), blocked on
-  deployment
+- [x] Seed the registry with the 4 bundled well-known specs (USDC, EURC,
+  AQUA, native XLM wrapper) through the live contract
+  (`packages/abi-registry/scripts/seed-well-known.ts`); recorded under
+  `seededSpecs` in `contracts/deployed.testnet.json`
 - [x] `AutoPublishIndexer` (`packages/orbital-indexer`) - unknown
   `contractId` auto-discovers, publishes under Orbital's key, and caches,
   with in-flight dedupe and backoff for undiscoverable contracts; manual
   `abi-registry publish` stays the override path
-- [ ] **"Fire test event" button on `/demo/contracts`** - code complete,
-  blocked on `demo-emitter` deployment (part of the deploy above)
+- [x] **"Fire test event" button on `/demo/contracts`** - `demo-emitter` is
+  deployed to testnet; the button needs `DEMO_EMITTER_CONTRACT_ID` and
+  `DEMO_EMITTER_SECRET` set in the hosting environment
 - [x] Preload the playground with well-known mainnet contracts (USDC, EURC,
   AQUA) - verified live
 
@@ -223,15 +227,15 @@ not compete with it - it standardizes what SEP-48 leaves open: contracts
 deployed *before* SEP-48 existed, off-chain registry verification, and the
 semantic layer above raw schemas.
 
-- [ ] Draft SEP covering (a) an off-chain schema registry with a verification
+- [x] Draft SEP covering (a) an off-chain schema registry with a verification
   pipeline cross-checking against on-chain `contractspec`, (b) **retroactive
   schema attestation** for pre-SEP-48 contracts already deployed on mainnet,
   and (c) a semantic taxonomy and entity-label format on top of raw event
   schemas
-- [ ] SEP-48 compatibility clause: an embedded SEP-48 event spec, when
+- [x] SEP-48 compatibility clause: an embedded SEP-48 event spec, when
   present, is the canonical schema source; the registry adds attestation and
   semantics on top, never a competing schema
-- [ ] Reference-implementation checklist mapping every SEP clause to code in this repo
+- [x] Reference-implementation checklist mapping every SEP clause to code in this repo
 - [ ] Submit as a draft PR to `stellar/stellar-protocol`
 
 ### Wave 2.2 - `orbital codegen`
@@ -239,46 +243,134 @@ semantic layer above raw schemas.
 - [x] `orbital typegen <contractId>` - ships TypeScript types + Zod schemas from
   a contract's resolved spec (registry first, WASM auto-discovery fallback);
   verified live against a mainnet contract
-- [ ] Consume SEP-48 event specs natively - embedded `#[contractevent]` spec
+- [x] Consume SEP-48 event specs natively - embedded `#[contractevent]` spec
   first, registry attestation as the fallback for pre-SEP-48 contracts.
   Differentiation vs `stellar contract bindings typescript` stays sharp:
-  Zod runtime validation, typed event guards, and React hooks - not raw types
-- [ ] Extend the CLI with typed event guards and `useContractEvent<T>` hooks
+  Zod runtime validation, typed event guards, and React hooks - not raw types -
+  [`Sep48EmbeddedClient`](./packages/abi-registry/src/discovery/Sep48EmbeddedClient.ts),
+  which `createDefaultAbiRegistryClient()` inserts first
+- [x] Extend the CLI with typed event guards and `useContractEvent<T>` hooks
   from the registry schema - building on the existing `generate.ts` in
   `packages/abi-registry`
-- [ ] `orbital.config.ts` contract manifest so regeneration is one CI command
-- [ ] Watch mode
-- [ ] Generated output committed in all three starter boilerplates
+- [x] `orbital.config.ts` contract manifest so regeneration is one CI command
+  (`orbital-codegen --check` fails on drift)
+- [x] Watch mode (`orbital-codegen --watch`)
+- [x] Generated output committed in all three starter boilerplates
 
 ### Wave 2.3 - Semantic layer
 
-- [ ] Human-readable event taxonomy on top of raw topics (e.g. `swap.executed`, `loan.liquidated`) with community-submitted mappings
-- [ ] Entity labels - verified contract → protocol/deployer/asset-issuer attribution - with a public submission and review flow
-- [ ] Labels and taxonomy published as **open data** (see [`docs/open-source-policy.md`](./docs/open-source-policy.md) - the data is open, the operated service is the product)
+- [x] Human-readable event taxonomy on top of raw topics (e.g. `swap.executed`, `loan.liquidated`) with community-submitted mappings - format in `schema/taxonomy.schema.json`, submission flow in [`docs/semantic-layer/submitting.md`](./docs/semantic-layer/submitting.md)
+- [x] Entity labels - verified contract → protocol/deployer/asset-issuer attribution - with a public submission and review flow (same document; data in [`data/labels/`](./data/labels))
+- [x] Labels and taxonomy published as **open data** (see [`docs/open-source-policy.md`](./docs/open-source-policy.md) - the data is open, the operated service is the product)
 
 ### Wave 2.4 - Hosted registry (operated)
 
-- [ ] Hosted read API for schemas, taxonomy, and labels (client stays MIT)
-- [ ] Verification pipeline cross-checking submitted schemas against on-chain `contractspec`
-- [ ] Public registry explorer page in `apps/web`
-- [ ] Replay/history beyond RPC's ~7-day retention window - built **on top of
-  the Composable Data Platform (Galexie exports) and CAP-67 retroactive
-  backfill**, not as an Orbital-operated ledger store; second candidate move
-  once this wave lands (semantics + memory = the full foundation); not yet
-  scheduled to a wave
+- [-] Hosted read API for schemas, taxonomy, and labels (client stays MIT) - routes on `main` in [`apps/web/app/api/v1/registry/`](./apps/web/app/api/v1/registry) (`spec`, `taxonomy`, `labels`, `health`, `openapi.json`)
+- [x] Verification pipeline cross-checking submitted schemas against on-chain `contractspec` - `abi-registry verify` re-checks every entry in `specs/community/` against mainnet in CI (`.github/workflows/community-specs.yml`); 29 verified so far
+- [x] Public registry explorer page in `apps/web` (`/registry`, `/registry/[contractId]`, `/explore`)
+- [x] Replay/history beyond RPC's ~7-day retention window - built **on a
+  backfill-configured RPC** (a second Soroban RPC endpoint with extended
+  retention), not on a Galexie export and not as an Orbital-operated ledger
+  store: `RpcHistoricalSource` / `withHistoricalFallback` in
+  [`packages/pulse-core/src/HistoricalSource.ts`](./packages/pulse-core/src/HistoricalSource.ts);
+  the choice is argued in
+  [`docs/design/long-range-replay.md`](./docs/design/long-range-replay.md) §2
 
 ---
 
-## Phase 3 - Anchor Events (`v2.0.0`, 2027 H1)
+## Phase 3 - Anchor Events (`v2.0.0`, in progress)
 
 **Goal:** extend the typed event taxonomy across the SEP-24 / SEP-31 anchor lifecycle, so compliance and audit tooling gets the same normalized-stream treatment as on-chain events.
 
 **Release gate:** `@orbital-stellar/anchor-sdk` on npm; SEP-24 and SEP-31 lifecycle events normalized into the standard taxonomy; at least one named anchor consuming it in production.
 
-- [ ] **`@orbital-stellar/anchor-sdk`** - typed client for SEP-24 interactive deposit/withdrawal and SEP-31 cross-border payment lifecycle events
-- [ ] **Lifecycle taxonomy** - `anchor.deposit.*`, `anchor.withdrawal.*`, `anchor.payment.*` mapped to the SEP-defined status machines
-- [ ] **Replay-safe delivery recipes** - cursor + retry queue composition documented in [`docs/COOKBOOK.md`](./docs/COOKBOOK.md) for audit-trail use cases
+- [x] **`@orbital-stellar/anchor-sdk`** - typed client for SEP-24 interactive deposit/withdrawal and SEP-31 cross-border payment lifecycle events (npm `0.2.0`, alongside SEP-1, SEP-10 and SEP-12)
+- [x] **Lifecycle taxonomy** - `anchor.deposit.*`, `anchor.withdrawal.*`, `anchor.payment.*` mapped to the SEP-defined status machines (`normalizeAnchorEvent`)
+- [x] **Replay-safe delivery recipes** - cursor + retry queue composition documented in [`docs/COOKBOOK.md`](./docs/COOKBOOK.md#10-capture-an-anchor-audit-trail) for audit-trail use cases
 - [ ] **Design-partner program** - 2–3 anchors or Soroban protocol teams co-designing the surface before `v2.0.0` freezes
+
+---
+
+## Phase 4 - Workers entry gate (`v3.x`, 2026 H2 → 2027)
+
+**Goal:** open the worker layer — an open standard plus a runtime that lets
+off-chain workers *trigger* on-chain settlement and other Orbital events
+**without ever taking custody** of the funds they move. This phase was
+unfrozen in writing by issue #1036 / the 2026-08-30
+[`CHANGELOG.md`](./CHANGELOG.md) unfreeze entry, which is the maintainer-signed
+rationale the [Frozen](#frozen--out-of-scope-until-the-core-thesis-is-proven)
+procedure requires. The counterparty that motivated it is named in the
+[`CHANGELOG.md`](./CHANGELOG.md) unfreeze entry (gate `W3`).
+
+**Status:** `W0`–`W3` met their gates — [`@orbital-stellar/worker-core@0.2.0`](https://www.npmjs.com/package/@orbital-stellar/worker-core)
+is on npm. `W4` was dropped ([#1137](https://github.com/orbital-stellar/orbital_stellar/issues/1137)):
+the worker layer is not a trading product, so the vault / copy-trade /
+latency-tier scope had no reason to exist.
+
+**Release gate (overall):** every one of the four shipped stages `W0`–`W3`
+reached its individual gate below, the §C.2 trigger-≠-custodian constraint was
+enforced as a review gate on every stage, and the build order was honored as a
+hard constraint. No stage shipped partial.
+
+### The §C.2 constraint (quoted verbatim, not paraphrased)
+
+> "The worker layer may trigger settlement but is never the custodian of the
+> funds it moves. Triggering is not custody: a worker that signs a release
+> instruction is exercising authority delegated by the vault contract, not
+> holding the underlying asset. A design that lets a worker unilaterally custody
+> user funds is out of scope and must be rejected at review."
+
+This is quoted verbatim from `ORBITAL_PRD.md` §C.2 and is the immutable design
+rule for the whole layer. It is cross-linked to
+`ORBITAL_PRD.md` §C.9 (the gate definition; the PRD is not part of this repo), so the gate
+stays readable without it. The gate's text is replicated
+here on purpose rather than referenced only, because the PRD can drift.
+
+### Build order is a hard constraint, not a suggestion
+
+`W4` (backstop) **lands last**. No PR may merge `W4` work before `W0`–`W3` are
+gated green. The backstop exists to *contain* a worker layer that is already
+proven not to custody funds, so it cannot ship before the no-custody property
+is demonstrated end-to-end. This ordering is enforced as a hard constraint in
+the release process, not a scheduling preference.
+
+### Staging W0–W4 (five stages, each with a gate)
+
+- **[x] `W0` — Worker standard (MIT).**
+  *Gate:* the open standard (event-worker spec, trigger/attestation envelope)
+  published and reviewed; reference types land in [`packages/worker-core`](./packages/worker-core) as
+  types only. No execution path, no funds path. This is the canonical surface
+  other tools emit against.
+- **[x] `W1` — `worker-core` runtime (MIT).**
+  *Gate:* [`@orbital-stellar/worker-core@0.2.0`](https://www.npmjs.com/package/@orbital-stellar/worker-core)
+  published to npm; trigger-execution
+  e2e test green against testnet, **with a custody assertion test** that fails
+  if the worker ever holds a signing key for user funds.
+- **[x] `W2` — external operators (MIT).**
+  *Gate:* operators other than Orbital can register and run workers, with
+  subscriptions and notifications in place. Still no authority over funds —
+  the record is billing and notification only.
+- **[x] `W3` — counterparty integration gate.**
+  *Gate:* the named counterparty (see the [`CHANGELOG.md`](./CHANGELOG.md)
+  unfreeze entry — name to be supplied by maintainer) signs off that the
+  worker layer's trigger-without-custody primitive satisfies their
+  settlement-desk automation need; at least one production settlement flow runs
+  worker-triggered, with the contract itself holding the funds. This gate is what motivated the
+  unfreeze — see the [`CHANGELOG.md`](./CHANGELOG.md) unfreeze entry. Until
+  `W3` is met, the worker layer stays staging-only.
+- **`W4` — backstop (operated service, lands last).** **Dropped** ([#1137](https://github.com/orbital-stellar/orbital_stellar/issues/1137)):
+  the worker layer is not a trading product — copy-trading would have required
+  moving subscriber funds, i.e. custody the layer must never hold — so the
+  vault / copy-trade / latency-tier scope was cut instead of built. The
+  time-insensitive backstop watcher (`BackstopWatcher` in `worker-core`) stays;
+  only the latency-sensitive tier and the vault it required were removed.
+  *Gate (had it shipped):* Orbital-operated backstop in staging with a met SLO (time-to-contain
+  on a worker fault) and a documented incident runbook. Ships only after
+  `W0`–`W3` are green, per the hard build-order constraint above.
+
+Workers are **not** implicitly frozen by the blanket scope rule below — they
+are explicitly carved out here. Everything else in the Frozen section stays
+frozen.
 
 ---
 
@@ -286,6 +378,12 @@ semantic layer above raw schemas.
 
 These items are **frozen, not deferred.** No issues, no waves, no partial
 implementations accepted against any row below while Phases 1–3 are open.
+
+**Carve-out (explicit, in writing):** the **worker layer (Part C)** is **not**
+implicitly frozen by this blanket rule. It was unfrozen by issue #1036 / the
+dated 2026-08-30 [`CHANGELOG.md`](./CHANGELOG.md) entry and now lives in
+[Phase 4 — Workers entry gate](#phase-4--workers-entry-gate) above, not here.
+Workers are removed from the implicit freeze; the rows below remain frozen.
 
 | Frozen item | Why frozen |
 |---|---|
@@ -297,6 +395,13 @@ implementations accepted against any row below while Phases 1–3 are open.
 
 Unfreezing any row requires the Phase 2 gate met **and** the Phase 3 gate met
 **and** a maintainer-signed rationale recorded in [`CHANGELOG.md`](./CHANGELOG.md).
+
+The worker-layer carve-out above is the maintainer-signed rationale required by
+this procedure, recorded in the dated 2026-08-30 `CHANGELOG.md` unfreeze entry.
+Workers were never an enumerated frozen row — they were only caught by the
+blanket scope rule — so the unfreeze is the explicit, written lift of that
+implicit freeze, tracked in [Phase 4](#phase-4--workers-entry-gate), not a new
+procedure.
 
 ---
 
@@ -310,6 +415,6 @@ Unfreezing any row requires the Phase 2 gate met **and** the Phase 3 gate met
 
 ## Contributing to the roadmap
 
-If you have a feature request or want to propose a change to the roadmap, open a [GitHub Discussion in the Ideas category](https://github.com/determined-001/orbital_stellar/discussions/categories/ideas). Roadmap items that attract significant community interest move up in priority.
+If you have a feature request or want to propose a change to the roadmap, open a [GitHub Discussion in the Ideas category](https://github.com/orbital-stellar/orbital_stellar/discussions/categories/ideas). Roadmap items that attract significant community interest move up in priority.
 
 Roadmap changes that **add scope** (new waves, new packages, new phase items) follow the normal PR flow. Roadmap changes that **remove or postpone shipped scope** require a maintainer sign-off and a note in [`CHANGELOG.md`](./CHANGELOG.md) under `### Changed`. Proposals targeting a [Frozen](#frozen--out-of-scope-until-the-core-thesis-is-proven) item will be closed with a pointer to this document.

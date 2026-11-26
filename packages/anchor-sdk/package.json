@@ -1,0 +1,49 @@
+{
+  "name": "@orbital-stellar/anchor-sdk",
+  "version": "0.2.0",
+  "description": "SDK for interacting with Stellar Anchors (SEP-12, SEP-24, SEP-31).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orbital-stellar/orbital_stellar.git",
+    "directory": "packages/anchor-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "tsc -w",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@orbital-stellar/pulse-core": "workspace:*",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^16.4.1",
+    "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbital-stellar.io/schema/attestation-envelope.schema.json",
+  "title": "AttestationEnvelope",
+  "description": "A signed attestation (SEP §5.2): a document, the account that signed it, and the signature. The signature covers SHA-256(\"Stellar Signed Message:\\n\" + domain + \"\\n\" + canonical JSON of payload), where canonical JSON is RFC 8785 and the domain is chosen by the verifier from what it expects to check - it is deliberately not a field of the envelope. This schema checks the envelope's shape only; it cannot check the signature. The payload is constrained here to \"has an attester\"; a contract event-schema payload is further described by attestation.schema.json.",
+  "type": "object",
+  "required": ["v", "payload", "publicKey", "signature"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Envelope version. A verifier rejects any other value."
+    },
+    "payload": {
+      "type": "object",
+      "required": ["attester"],
+      "properties": {
+        "attester": {
+          "type": "string",
+          "description": "The attesting account (G…). Must equal publicKey.",
+          "pattern": "^G[A-Z2-7]{55}$"
+        }
+      }
+    },
+    "publicKey": {
+      "type": "string",
+      "description": "The signer's Stellar account address (G…).",
+      "pattern": "^G[A-Z2-7]{55}$"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Standard base64 (with padding) of the 64-byte ed25519 signature.",
+      "pattern": "^[A-Za-z0-9+/]{86}==$"
+    }
+  }
+}

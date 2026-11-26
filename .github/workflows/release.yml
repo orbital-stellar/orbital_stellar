@@ -22,9 +22,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -37,23 +37,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build pulse-core
-        run: pnpm tsc -p packages/pulse-core/tsconfig.json
-
-      - name: Build pulse-webhooks
-        run: pnpm tsc -p packages/pulse-webhooks/tsconfig.json
-
-      - name: Typecheck pulse-notify
-        run: pnpm tsc --noEmit -p packages/pulse-notify/tsconfig.json
+      # pnpm build walks the workspace in dependency order, so abi-registry's
+      # dist exists before pulse-core (which imports it) compiles.
+      - name: Build all packages
+        run: pnpm build
 
       - name: Typecheck apps/web
         run: pnpm tsc --noEmit -p apps/web/tsconfig.json
 
-      - name: Build all packages
-        run: pnpm build
-
       - name: Run tests
         run: pnpm -r --if-present test
+
+      - name: Generate open data artifacts
+        run: node scripts/generate-open-data.mjs
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -61,6 +57,11 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            data/taxonomy.json
+            data/labels.json
+            data/integrity.json
+            data/LICENSE
 
       # ── npm publish ───────────────────────────────────────────────────────
       # Packages are already live on npm under the @orbital-stellar scope;

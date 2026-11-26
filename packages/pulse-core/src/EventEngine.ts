@@ -1,16 +1,43 @@
-import { Horizon } from "@stellar/stellar-sdk";
-import { createDefaultAbiRegistryClient, decodeContractEvent } from "@orbital-stellar/abi-registry";
-import type { ContractSpec, XdrContractSpec } from "@orbital-stellar/abi-registry";
+import { Horizon, scValToNative, xdr } from "@stellar/stellar-sdk";
+import {
+  createDefaultAbiRegistryClient,
+  decodeContractEvent,
+  resolvableTopicFromXdr,
+  SEP41_TAXONOMY,
+  TaxonomyResolver,
+} from "@orbital-stellar/abi-registry";
+import type {
+  ContractSpec,
+  ResolvableEvent,
+  TaxonomyResolution,
+  XdrContractSpec,
+} from "@orbital-stellar/abi-registry";
 import { Watcher } from "./Watcher.js";
 import { fullJitterBackoffMs } from "./backoff.js";
-import { EngineAlreadyStartedError, NetworkMismatchError } from "./errors.js";
+import {
+  EngineAlreadyStartedError,
+  InvalidIngestionModeError,
+  NetworkMismatchError,
+} from "./errors.js";
 import { resolveSorobanPageLimit, SorobanSubscriber } from "./SorobanSubscriber.js";
-import { SorobanRpcClient } from "./SorobanRpcClient.js";
-import type { SorobanNetworkInfo } from "./SorobanRpcClient.js";
+import { SorobanRpcClient, rpcSupportsUnifiedEvents } from "./SorobanRpcClient.js";
+import type { SorobanNetworkInfo, SorobanRpcEvent } from "./SorobanRpcClient.js";
 import type { SorobanRpcLike, SorobanEvent } from "./SorobanSubscriber.js";
+import { withHistoricalFallback } from "./HistoricalSource.js";
+import type { HistoricalSource } from "./HistoricalSource.js";
 import { toAccountAddress, toContractAddress } from "./address.js";
-import { toStellarAmount } from "./amount.js";
+import { toStellarAmount, fromBigInt } from "./amount.js";
 import { validateContractFilters } from "./contractFilters.js";
+import { withTimestampDate } from "./timestampDate.js";
+import type { Timestamped } from "./timestampDate.js";
+import { decodeUnifiedTransfer } from "./cap67/decodeTransfer.js";
+import { decodeUnifiedMint } from "./cap67/decodeMint.js";
+import { decodeUnifiedBurn } from "./cap67/decodeBurn.js";
+import { decodeUnifiedSetAuthorized } from "./cap67/decodeSetAuthorized.js";
+import { normalizeUnifiedSetAuthorized } from "./cap67/normalizeSetAuthorized.js";
+import { issuerFromAsset, toPaymentAddress } from "./cap67/normalizeAssetEvent.js";
+import { DedupeWindow, deriveDedupeKey } from "./dedupe.js";
+import type { DedupeEventRef, DedupeTransport } from "./dedupe.js";
 import type {
   AccountCreatedEvent,
   AccountMergeEvent,
@@ -28,7 +55,9 @@ import type {
   DataEvent,
   DataEventType,
   EngineStatus,
+  EventFamily,
   HealthCheckResult,
+  IngestionMode,
   LiquidityPoolDepositEvent,
   LiquidityPoolReserve,
   LiquidityPoolWithdrawEvent,
@@ -38,6 +67,7 @@ import type {
   OfferEvent,
   OfferEventType,
   PriceR,
+  ClassicEventIdentity,
   PaymentEvent,
   PaymentEventType,
   ReconnectConfig,
@@ -74,6 +104,7 @@ import {
   NETWORK_PASSPHRASES,
   ContractEmittedEvent,
   ContractInvokedEvent,
+  resolveFamilyTransport,
 } from "./index.js";
 import { normalizeClaimPredicate } from "./claimPredicate.js";
 
@@ -95,12 +126,6 @@ type NormalizedEventOrPending =
   | ContractInvokedEvent
   | ContractEmittedEvent;
 
-/**
- * Adds the lazy, non-enumerable `timestampDate` getter to an event type.
- * Applied at runtime by {@link withTimestampDate} once an event has been
- * normalized, so every event leaving the engine carries it.
- */
-type Timestamped<T> = T & { readonly timestampDate: Date };
 type Raw<T> = T extends any ? Omit<T, "timestampDate"> : never;
 
 type StreamCallbacks = {
@@ -123,6 +148,41 @@ const DEFAULT_RECONNECT: Required<ReconnectConfig> = {
 
 const STELLAR_MAX_TRUSTLINE_LIMIT = "922337203685.4775807";
 
+const VALID_INGESTION_MODES: readonly IngestionMode[] = ["unified", "horizon", "auto"];
+
+/**
+ * Maps a raw Horizon operation `type` string to the {@link EventFamily} it
+ * belongs to, for transport-routing purposes (issue 6.12). Only operation
+ * types `_normalize()` actually recognizes appear here - an op type with no
+ * entry is never routed away from Horizon (see `horizonEventFamily()`).
+ */
+const HORIZON_OP_TYPE_TO_FAMILY: Readonly<Record<string, EventFamily>> = {
+  payment: "payment",
+  create_account: "accountCreated",
+  set_options: "accountOptions",
+  manage_sell_offer: "offer",
+  manage_buy_offer: "offer",
+  bump_sequence: "bumpSequence",
+  manage_data: "manageData",
+  change_trust: "trustlineLimit",
+  account_merge: "accountMerge",
+  create_claimable_balance: "claimableBalance",
+  claim_claimable_balance: "claimableBalance",
+  liquidity_pool_deposit: "liquidityPool",
+  liquidity_pool_withdraw: "liquidityPool",
+  allow_trust: "trustlineAuth",
+  set_trust_line_flags: "trustlineAuth",
+};
+
+/**
+ * Bounded capacity of the dedupe window (issue 6.13). Sized generously
+ * relative to the narrow routing-transition window it exists to cover -
+ * this is not meant to catch duplicates across the entire runtime, only
+ * ones observed close together while a mode switch or `"auto"` fallback
+ * resolves.
+ */
+const DEDUPE_WINDOW_CAPACITY = 1024;
+
 const noop: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 
 /**
@@ -138,24 +198,31 @@ function stableFilterKey(filters: ContractFilter[]): string {
   return JSON.stringify(normalized);
 }
 
-/**
- * Attaches a non-enumerable lazy getter `timestampDate` to an event object.
- * The Date is parsed from `event.timestamp` on first access and cached.
- * JSON.stringify output is unaffected because the property is non-enumerable.
- */
-function withTimestampDate<T extends { timestamp: string }>(event: T): Timestamped<T> {
-  let cached: Date | undefined;
-  Object.defineProperty(event, "timestampDate", {
-    enumerable: false,
-    configurable: true,
-    get(): Date {
-      if (cached === undefined) cached = new Date(event.timestamp);
-      return cached;
-    },
-  });
-  return event as Timestamped<T>;
-}
+/** Namespaced refcount keys - the three subscription registries key independently. */
+const refKey = {
+  address: (address: string) => `addr:${address}`,
+  contract: (id: string) => `contract:${id}`,
+  config: (filterKey: string) => `config:${filterKey}`,
+};
 
+/**
+ * The in-process source of Stellar events: it streams from Horizon and, when
+ * `config.soroban` is set, polls Stellar RPC for contract events, normalizes
+ * each record and emits it on the `Watcher` of every subscription it matches.
+ * Create one, call `subscribe()` or `subscribeContract()` for the addresses and
+ * contracts you care about (asking twice for the same one returns the same
+ * `Watcher`), then `start()`. A dropped stream is reopened with backoff (see
+ * `config.reconnect`), and `stop()` closes the streams and stops every watcher.
+ *
+ * @throws {@link InvalidIngestionModeError} From the constructor, when
+ *   `config.ingestion` is not a supported mode.
+ * @throws {@link UnknownNetworkError} From the constructor, when
+ *   `config.network` is not a known network and `config.horizonUrl` is unset.
+ * @throws Error From the constructor, for other invalid settings: for example
+ *   a `horizonUrl` that is not an http or https URL, an empty or repeated
+ *   `network` list, or a `soroban` option that is missing or out of range (a
+ *   `TypeError` or `RangeError`).
+ */
 export class EventEngine {
   private server: Horizon.Server;
   private registry: Map<string, Watcher> = new Map();
@@ -170,6 +237,20 @@ export class EventEngine {
    * `unsubscribeContract(config)` for lookup.
    */
   private contractConfigRegistry: Map<string, Watcher> = new Map();
+  /**
+   * How many outstanding `subscribe*()` calls share each registry entry.
+   *
+   * Subscriptions are memoised by key, so concurrent callers asking for the
+   * same address or contract get the *same* `Watcher` object. Without a count,
+   * the first `unsubscribe()` would call `stop()` on that shared watcher and
+   * silently kill every other caller's event flow - `stop()` removes all
+   * listeners and makes `emit()` a no-op, so the others keep their connection
+   * open and simply never receive anything again.
+   *
+   * Keys are namespaced (`addr:` / `contract:` / `config:`) because the three
+   * registries have independent key spaces that could otherwise collide.
+   */
+  private refCounts: Map<string, number> = new Map();
   private subscriptionNames: Map<string, string> = new Map();
   private stopStream: HorizonStreamStopper | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,6 +287,52 @@ export class EventEngine {
   private consecutiveCursorFailures = 0;
   private isCursorStoreUnhealthy = false;
   private pausedSources = new Set<"horizon" | "soroban">();
+  /** The configured value of `CoreConfig.ingestion`. Validated in the constructor. */
+  private ingestion: IngestionMode = "horizon";
+  /** Internal bounded queue for normalized events to protect slow consumers. */
+  private eventQueue: Array<Timestamped<NormalizedEventOrPending>> = [];
+  private queueHighWaterMark: number;
+  private queueLowWaterMark: number;
+  private queuePolicy: "pause" | "drop-oldest" | "drop-newest";
+  private processingQueue = false;
+  private inBackpressure = false;
+  private wePausedSourcesForBackpressure = false;
+  /**
+   * The resolved `"unified" | "horizon"` transport actually in effect,
+   * per {@link resolveEffectiveIngestion}. Starts at `"horizon"` (matching
+   * `ingestion`'s own default) and is (re)computed once, right before the
+   * unified poller starts - `"horizon"` mode and an unconfigured unified
+   * transport never advance past this default, since there's nothing to
+   * resolve. Read by `horizonEventFamily()`'s Horizon-side suppression and
+   * by `dispatchUnifiedEvent()`'s unified-side dispatch gate.
+   */
+  private effectiveIngestion: "unified" | "horizon" = "horizon";
+  /**
+   * Recently-seen dedupe keys (issue 6.13), guarding against the same
+   * on-chain movement reaching a `Watcher` twice during a routing
+   * transition - once via Horizon, once via the unified transport. Checked
+   * once, at the top of {@link route}.
+   */
+  private readonly dedupeWindow = new DedupeWindow(DEDUPE_WINDOW_CAPACITY);
+  /**
+   * Associates a dedupe key - and the transport that observed it - with the
+   * exact event object it was derived for, without widening any public event
+   * type's shape. Set by the Horizon `onmessage` handler and by
+   * `dispatchUnifiedEvent()` for the two families with a unified equivalent
+   * (`payment`, `trustlineAuth`); every other event is never a duplication
+   * risk (only one transport ever produces it) and is never given an entry
+   * here. A `WeakMap` needs no manual cleanup - an entry disappears once the
+   * event object itself is no longer referenced.
+   *
+   * The transport travels with the key because suppression is cross-transport
+   * only: one operation can emit several unified events sharing a single
+   * (operation-granular) key, and those must not suppress each other. See
+   * {@link DedupeWindow.seenFrom}.
+   */
+  private readonly dedupeKeyByEvent = new WeakMap<
+    object,
+    { key: string; transport: DedupeTransport }
+  >();
   /**
    * Optional live Soroban subscriber. Wired only when the engine is configured
    * for live contract streaming; otherwise undefined, and the guarded calls
@@ -220,8 +347,38 @@ export class EventEngine {
    * Resolves to `undefined` (with a warning logged) if the probe fails.
    */
   private sorobanNetworkReady?: Promise<SorobanNetworkInfo | undefined>;
+  /**
+   * RPC client used by the CAP-67 unified event poller. Wired only when
+   * `config.soroban.unifiedEvents` is set; shares its network-mismatch probe
+   * with `sorobanNetworkReady` when both features are configured.
+   */
+  private unifiedRpc?: SorobanRpcClient;
+  /** Aborted on `stop()` to cancel the in-flight `pollUnifiedEvents` loop. */
+  private unifiedController?: AbortController;
+  /** Resolves once the unified poller's loop has fully exited after `stop()` aborts it. */
+  private unifiedPollPromise?: Promise<{ cursor: string | undefined }>;
+  /**
+   * Tail of the chain of in-flight unified-cursor writes.
+   *
+   * `onCursor` fires from inside the poll loop and cannot await, so writes are
+   * chained onto this promise instead of being dropped. That buys two things
+   * the previous `void this.persistUnifiedCursor(...)` did not: `stop()` can
+   * wait for the last write to land, and two writes can never race such that
+   * an older cursor is the one that survives.
+   *
+   * Null until the first write is queued. That matters: `stop()` must not
+   * introduce an `await` on engines that never ran a unified poller, because
+   * the teardown after it would then be deferred by a microtask and callers
+   * that read engine state straight after `stop()` would see it un-torn-down.
+   */
+  private unifiedCursorWrites: Promise<void> | null = null;
+  private unifiedRunning = false;
+  private unifiedLastEventAt: string | null = null;
+  private unifiedCursorKey = "";
   /** Optional ABI registry used to enrich `contract.emitted` events with `decodedData`. */
   private abiRegistry?: AbiRegistryClientLike;
+  /** Resolves `semantic` on `contract.emitted` events (issue #909). `undefined` when `config.taxonomy` is `false`. */
+  private taxonomyResolver?: TaxonomyResolver;
   /**
    * Present only when constructed with `CoreConfig.network` as an array.
    * Each value is a fully independent single-network `EventEngine` (own
@@ -238,7 +395,22 @@ export class EventEngine {
    * @param config - The core configuration for the engine.
    */
   constructor(config: CoreConfig) {
+    const ingestion = config.ingestion ?? "horizon";
+    if (!VALID_INGESTION_MODES.includes(ingestion)) {
+      throw new InvalidIngestionModeError(ingestion);
+    }
+    this.ingestion = ingestion;
+
     this.sorobanPageLimit = resolveSorobanPageLimit(config.soroban?.pageLimit);
+
+    // Queue configuration
+    const defaultHigh = 10000;
+    this.queueHighWaterMark = Math.max(1, Math.floor(config.queue?.highWaterMark ?? defaultHigh));
+    this.queueLowWaterMark = Math.max(
+      1,
+      Math.floor(config.queue?.lowWaterMark ?? Math.floor(this.queueHighWaterMark / 2)),
+    );
+    this.queuePolicy = config.queue?.policy ?? "pause";
 
     if (Array.isArray(config.network)) {
       this.networkSources = this.buildNetworkSources(config.network, config);
@@ -285,9 +457,9 @@ export class EventEngine {
     this.streamKey = config.streamKey ?? `horizon:${config.network}`;
     this.cursorFailureThreshold = config.cursorFailureThreshold ?? 5;
     this.abiRegistry = EventEngine.resolveAbiRegistry(config.abiRegistry);
+    this.taxonomyResolver = EventEngine.resolveTaxonomyResolver(config.taxonomy);
     this.cursorStore = config.cursorStore;
     this.network = config.network;
-
     if (config.soroban) {
       const rpc = new SorobanRpcClient({
         url: config.soroban.rpcUrl,
@@ -333,6 +505,13 @@ export class EventEngine {
         pageLimit: config.soroban.pageLimit,
         onEvent: async (event) => this.handleSorobanEvent(event),
       });
+
+      if (config.soroban.unifiedEvents) {
+        this.unifiedRpc = rpc;
+        this.unifiedCursorKey = config.streamKey
+          ? `${config.streamKey}:unified`
+          : `unified:${config.network}`;
+      }
     }
   }
 
@@ -360,6 +539,68 @@ export class EventEngine {
     if (abiRegistry === false) return undefined;
     if (abiRegistry) return abiRegistry;
     return createDefaultAbiRegistryClient();
+  }
+
+  /**
+   * Resolves `CoreConfig.taxonomy` to the `TaxonomyResolver` actually used:
+   * `false` opts out (`semantic` stays always `undefined`), an explicit
+   * entry array builds a resolver from just those entries, and omitting it
+   * entirely builds one from `SEP41_TAXONOMY`. Mirrors
+   * {@link resolveAbiRegistry}'s three-way shape - same defaulting
+   * convention, independent config surface.
+   */
+  private static resolveTaxonomyResolver(
+    taxonomy: CoreConfig["taxonomy"],
+  ): TaxonomyResolver | undefined {
+    if (taxonomy === false) return undefined;
+    return new TaxonomyResolver(taxonomy ?? SEP41_TAXONOMY);
+  }
+
+  /**
+   * Structural sniff of the data payload's shape from its raw XDR, for
+   * taxonomy entries that constrain `match.dataShape` (issue #909). Returns
+   * `undefined` on anything that isn't a parseable ScVal - not a guess, the
+   * same "unknown is a no-match" rule `resolvableTopicFromXdr` documents.
+   */
+  private static sniffDataShape(rawValue: unknown): "void" | "scalar" | "map" | "vec" | undefined {
+    if (typeof rawValue !== "string" || rawValue === "") return undefined;
+    let scval: xdr.ScVal;
+    try {
+      scval = xdr.ScVal.fromXDR(rawValue, "base64");
+    } catch {
+      return undefined;
+    }
+    switch (scval.switch().name) {
+      case "scvVoid":
+        return "void";
+      case "scvVec":
+        return "vec";
+      case "scvMap":
+        return "map";
+      default:
+        return "scalar";
+    }
+  }
+
+  /**
+   * Resolves `semantic` for a `contract.emitted` event (issue #909),
+   * independent of `decodedData`/`abiRegistry` - this needs only the raw
+   * topics and contract id, so it resolves even for a contract with no
+   * published ABI spec. `undefined` when no taxonomy is configured or
+   * nothing maps.
+   */
+  private resolveSemantic(
+    contractId: string,
+    rawTopics: ReadonlyArray<unknown>,
+    rawData: unknown,
+  ): TaxonomyResolution | undefined {
+    if (!this.taxonomyResolver) return undefined;
+    const event: ResolvableEvent = {
+      contractId,
+      topics: rawTopics.map((t) => resolvableTopicFromXdr(String(t))),
+      dataShape: EventEngine.sniffDataShape(rawData),
+    };
+    return this.taxonomyResolver.resolve(event) ?? undefined;
   }
 
   /**
@@ -397,6 +638,7 @@ export class EventEngine {
         cursorFailureThreshold: config.cursorFailureThreshold,
         abiRegistry: config.abiRegistry,
         streamKey: config.streamKey ? `${config.streamKey}:${source.network}` : undefined,
+        ingestion: config.ingestion,
       });
       networkSources.set(source.network, subEngine);
     }
@@ -511,9 +753,35 @@ export class EventEngine {
     }
   }
 
+  /** Records one more holder of a shared subscription. */
+  private retain(key: string): void {
+    this.refCounts.set(key, (this.refCounts.get(key) ?? 0) + 1);
+  }
+
+  /**
+   * Drops one holder of a shared subscription.
+   * @returns true when that was the last holder and the watcher should stop.
+   */
+  private release(key: string): boolean {
+    const count = this.refCounts.get(key);
+    // Unknown key means the watcher was already torn down (or stopped directly
+    // via `watcher.stop()`); treat it as the final release.
+    if (count === undefined) return true;
+    if (count <= 1) {
+      this.refCounts.delete(key);
+      return true;
+    }
+    this.refCounts.set(key, count - 1);
+    return false;
+  }
+
   /**
    * Subscribes to events for a given Stellar address.
    * Returns an existing Watcher if one already exists for the address.
+   *
+   * The returned Watcher is shared between callers asking for the same
+   * address. It stays alive until every caller has unsubscribed, so one
+   * caller disconnecting cannot silence the others.
    * @param address - The Stellar address to watch.
    * @param options - Optional subscription options, including a filter predicate.
    * @returns The Watcher instance for the address.
@@ -521,6 +789,7 @@ export class EventEngine {
   subscribe(address: string, options?: SubscribeOptions): Watcher {
     const existingWatcher = this.registry.get(address);
     if (existingWatcher) {
+      this.retain(refKey.address(address));
       if (options?.filter) {
         const name = this.subscriptionNames.get(address);
         if (name !== undefined) {
@@ -539,6 +808,7 @@ export class EventEngine {
     }
 
     const watcher = new Watcher(address);
+    this.retain(refKey.address(address));
     if (options?.name !== undefined) {
       this.subscriptionNames.set(address, options.name);
     }
@@ -554,6 +824,7 @@ export class EventEngine {
       }
       watcher.addStopHandler(() => {
         this.registry.delete(address);
+        this.refCounts.delete(refKey.address(address));
         this.subscriptionNames.delete(address);
         for (const subWatcher of subWatchers) subWatcher.stop();
       });
@@ -566,6 +837,7 @@ export class EventEngine {
     }
     watcher.addStopHandler(() => {
       this.registry.delete(address);
+      this.refCounts.delete(refKey.address(address));
       this.filters.delete(address);
       this.subscriptionNames.delete(address);
     });
@@ -574,19 +846,32 @@ export class EventEngine {
   }
 
   /**
-   * Unsubscribes from events for a given Stellar address and stops its watcher.
+   * Releases one subscription to a given Stellar address.
+   *
+   * The underlying Watcher is shared, so it is only stopped once every caller
+   * that subscribed to this address has unsubscribed. Stopping it while another
+   * caller still holds it would remove their listeners and silently end their
+   * event flow.
    * @param address - The Stellar address to stop watching.
    */
   unsubscribe(address: string): void {
-    this.registry.get(address)?.stop();
+    const watcher = this.registry.get(address);
+    if (!watcher) return;
+    if (this.release(refKey.address(address))) {
+      watcher.stop();
+    }
   }
 
   /**
    * Stops all active watchers without closing the underlying SSE stream.
    * Use this to drain subscriptions while keeping the stream open.
+   *
+   * This is a teardown operation and deliberately ignores reference counts:
+   * it stops every watcher outright, however many holders each has. Each
+   * watcher's stop handler clears its own refcount entry.
    */
   unsubscribeAll(): void {
-    for (const watcher of this.registry.values()) {
+    for (const watcher of [...this.registry.values()]) {
       watcher.stop();
     }
   }
@@ -625,9 +910,13 @@ export class EventEngine {
 
       const key = stableFilterKey(config.filters);
       const existing = this.contractConfigRegistry.get(key);
-      if (existing) return existing;
+      if (existing) {
+        this.retain(refKey.config(key));
+        return existing;
+      }
 
       const watcher = new Watcher(key);
+      this.retain(refKey.config(key));
 
       if (this.networkSources) {
         const subWatchers: Watcher[] = [];
@@ -638,13 +927,17 @@ export class EventEngine {
         }
         watcher.addStopHandler(() => {
           this.contractConfigRegistry.delete(key);
+          this.refCounts.delete(refKey.config(key));
           for (const subWatcher of subWatchers) subWatcher.stop();
         });
         this.contractConfigRegistry.set(key, watcher);
         return watcher;
       }
 
-      watcher.addStopHandler(() => this.contractConfigRegistry.delete(key));
+      watcher.addStopHandler(() => {
+        this.contractConfigRegistry.delete(key);
+        this.refCounts.delete(refKey.config(key));
+      });
       this.contractConfigRegistry.set(key, watcher);
       return watcher;
     }
@@ -653,6 +946,7 @@ export class EventEngine {
     const id = idOrConfig;
     const existing = this.contractRegistry.get(id);
     if (existing) {
+      this.retain(refKey.contract(id));
       if (options?.filter) {
         this.log.warn(
           `[pulse-core] subscribeContract() called for ${this.describeSubscription(id)} which already has an active watcher - filter option ignored.`,
@@ -663,6 +957,7 @@ export class EventEngine {
     }
 
     const watcher = new Watcher(id);
+    this.retain(refKey.contract(id));
     const filters = options?.filters ?? [];
     if (options?.name !== undefined) {
       this.subscriptionNames.set(id, options.name);
@@ -677,6 +972,7 @@ export class EventEngine {
       }
       watcher.addStopHandler(() => {
         this.contractRegistry.delete(id);
+        this.refCounts.delete(refKey.contract(id));
         this.subscriptionNames.delete(id);
         for (const subWatcher of subWatchers) subWatcher.stop();
       });
@@ -689,6 +985,7 @@ export class EventEngine {
     }
     watcher.addStopHandler(() => {
       this.contractRegistry.delete(id);
+      this.refCounts.delete(refKey.contract(id));
       this.subscriptionNames.delete(id);
       this.filters.delete(id);
       if (this.contractRegistry.size === 0 && this.sorobanSubscriber) {
@@ -717,11 +1014,16 @@ export class EventEngine {
   unsubscribeContract(idOrConfig: string | ContractSubscriptionConfig): void {
     if (typeof idOrConfig === "object") {
       const key = stableFilterKey(idOrConfig.filters);
+      const watcher = this.contractConfigRegistry.get(key);
+      if (!watcher) return;
       // The watcher's stop handler removes it from contractConfigRegistry.
-      this.contractConfigRegistry.get(key)?.stop();
+      // Only the last holder may stop it - see `refCounts`.
+      if (this.release(refKey.config(key))) watcher.stop();
       return;
     }
-    this.contractRegistry.get(idOrConfig)?.watcher.stop();
+    const entry = this.contractRegistry.get(idOrConfig);
+    if (!entry) return;
+    if (this.release(refKey.contract(idOrConfig))) entry.watcher.stop();
   }
 
   /**
@@ -734,13 +1036,20 @@ export class EventEngine {
    * - The `CursorStore` is **not** consulted or updated during replay: cursors
    *   are ephemeral and progress is intentionally discarded when the run ends.
    *
-   * @param options.rpc         - A Soroban RPC client compatible with `SorobanRpcLike`.
-   * @param options.filters     - Optional contract subscription filters (same semantics as `subscribeContract`).
-   * @param options.startLedger - Ledger sequence to begin replay from (passed as initial cursor hint).
-   * @param options.endLedger   - Ledger sequence at which replay stops (exclusive).
-   * @param options.onEvent     - Called for every event in range.
-   * @param options.onDone      - Called once when replay is complete.
-   * @param options.pageSize    - Optional page size override (default 100).
+   * @param options.rpc               - A Soroban RPC client compatible with `SorobanRpcLike`.
+   * @param options.filters           - Optional contract subscription filters (same semantics as `subscribeContract`).
+   * @param options.startLedger       - Ledger sequence to begin replay from (passed as initial cursor hint).
+   * @param options.endLedger         - Ledger sequence at which replay stops (exclusive).
+   * @param options.onEvent           - Called for every event in range.
+   * @param options.onDone            - Called once when replay is complete.
+   * @param options.pageSize          - Optional page size override (default 100).
+   * @param options.historicalSource  - Optional fallback for a `startLedger` older than `rpc`'s
+   *   retention window (issue #920). When `rpc.getEvents` fails with Soroban RPC's out-of-retention
+   *   shape and `historicalSource.covers(startLedger)`, replay transparently continues against it
+   *   instead of failing - see `docs/design/long-range-replay.md` §4 for the fallback's scope and
+   *   `HistoricalSource.ts`'s `withHistoricalFallback` for the mechanism. Omitted (or a range still
+   *   out of retention with no covering source) throws `OutOfRetentionError`, naming the parsed
+   *   retention boundary and whether a historical source was configured.
    */
   replayContracts(options: {
     rpc: SorobanRpcLike;
@@ -750,6 +1059,7 @@ export class EventEngine {
     onEvent: (event: SorobanEvent) => Promise<void>;
     onDone: () => void;
     pageSize?: number;
+    historicalSource?: HistoricalSource;
   }): SorobanSubscriber {
     // A no-op CursorStore: replay never reads from or writes to persistent storage.
     const noCursorStore = {
@@ -761,8 +1071,10 @@ export class EventEngine {
       },
     };
 
+    const rpc = withHistoricalFallback(options.rpc, options.historicalSource, options.startLedger);
+
     const subscriber = new SorobanSubscriber({
-      rpc: options.rpc,
+      rpc,
       cursorStore: noCursorStore,
       onEvent: options.onEvent,
       endLedger: options.endLedger,
@@ -846,35 +1158,151 @@ export class EventEngine {
 
     this.openStream(false);
     if (this.sorobanSubscriber) {
-      if (cachedNetwork || !this.sorobanNetworkReady) {
-        // Already verified above (cache was warm), or no in-flight probe to wait on.
-        this.sorobanSubscriber.start();
-      } else {
-        // The constructor's getNetwork() probe hasn't resolved yet. Defer opening
-        // the Soroban subscriber until it settles so a mismatch is caught before
-        // any polling begins, instead of silently processing wrong-network events.
-        const subscriber = this.sorobanSubscriber;
-        const startGeneration = this.stopGeneration;
-        void this.sorobanNetworkReady.then((info) => {
-          // Bail if stop() was called while the probe was in flight. Unlike
-          // `isRunning`, this isn't perturbed by unrelated Horizon reconnects.
-          if (this.stopGeneration !== startGeneration) return;
-          if (info) {
-            const expected = NETWORK_PASSPHRASES[this.network];
-            if (info.passphrase !== expected) {
-              this.log.error(
-                "[pulse-core] Soroban RPC network mismatch detected after start(); stopping engine.",
-                { expected, actual: info.passphrase },
-              );
-              this.stop();
-              return;
-            }
-          }
-          subscriber.start();
-        });
-      }
+      const subscriber = this.sorobanSubscriber;
+      this.runAfterNetworkVerified(cachedNetwork, () => subscriber.start());
+    }
+    if (this.unifiedRpc) {
+      this.runAfterNetworkVerified(cachedNetwork, (info) => {
+        this.effectiveIngestion = this.resolveEffectiveIngestion(info ?? undefined);
+        this.startUnifiedPoller();
+      });
     }
     return true;
+  }
+
+  /**
+   * Runs `onVerified` once the Soroban RPC's network passphrase is confirmed
+   * to match this engine's configured network - immediately if already
+   * verified (`cachedNetwork` warm), or after the constructor's `getNetwork()`
+   * probe settles otherwise. Calls `stop()` instead of `onVerified` if a
+   * mismatch is found. Shared by the Soroban subscriber and unified poller
+   * startup paths in `start()`, since both sit behind the same probe.
+   *
+   * `onVerified` receives the verified {@link SorobanNetworkInfo} (the warm
+   * cache in the immediate case, the settled probe's result otherwise) so
+   * callers that need it - `"auto"` ingestion's protocol-version check -
+   * don't have to re-probe.
+   */
+  private runAfterNetworkVerified(
+    cachedNetwork: SorobanNetworkInfo | null | undefined,
+    onVerified: (info: SorobanNetworkInfo | null | undefined) => void,
+  ): void {
+    if (cachedNetwork || !this.sorobanNetworkReady) {
+      // Already verified above (cache was warm), or no in-flight probe to wait on.
+      onVerified(cachedNetwork);
+      return;
+    }
+
+    // The constructor's getNetwork() probe hasn't resolved yet. Defer until it
+    // settles so a mismatch is caught before any polling begins, instead of
+    // silently processing wrong-network events.
+    const startGeneration = this.stopGeneration;
+    void this.sorobanNetworkReady.then((info) => {
+      // Bail if stop() was called while the probe was in flight. Unlike
+      // `isRunning`, this isn't perturbed by unrelated Horizon reconnects.
+      if (this.stopGeneration !== startGeneration) return;
+      if (info) {
+        const expected = NETWORK_PASSPHRASES[this.network];
+        if (info.passphrase !== expected) {
+          this.log.error(
+            "[pulse-core] Soroban RPC network mismatch detected after start(); stopping engine.",
+            { expected, actual: info.passphrase },
+          );
+          this.stop();
+          return;
+        }
+      }
+      onVerified(info);
+    });
+  }
+
+  /**
+   * Resolves `this.ingestion` down to the concrete `"unified" | "horizon"`
+   * transport actually in effect (issue 6.12):
+   * - `"horizon"` stays `"horizon"` unconditionally - the documented
+   *   zero-behavior-change default.
+   * - `"unified"` resolves to `"unified"` whenever a unified transport is
+   *   configured at all (`this.unifiedRpc` set); with none configured
+   *   there's nothing to route through, so it falls back to `"horizon"`.
+   * - `"auto"` resolves to `"unified"` only when both a unified transport is
+   *   configured and the probed RPC reports CAP-67 support
+   *   ({@link rpcSupportsUnifiedEvents}); otherwise `"horizon"`.
+   */
+  private resolveEffectiveIngestion(
+    networkInfo: SorobanNetworkInfo | undefined,
+  ): "unified" | "horizon" {
+    if (this.ingestion === "horizon") return "horizon";
+    if (!this.unifiedRpc) return "horizon";
+    if (this.ingestion === "unified") return "unified";
+    return rpcSupportsUnifiedEvents(networkInfo) ? "unified" : "horizon";
+  }
+
+  /**
+   * Maps a raw Horizon SSE record to the {@link EventFamily} it belongs to,
+   * via `HORIZON_OP_TYPE_TO_FAMILY`. Returns `undefined` for an operation
+   * type `_normalize()` doesn't recognize (never a routing candidate).
+   */
+  private horizonEventFamily(record: unknown): EventFamily | undefined {
+    if (!this.isRecord(record) || typeof record.type !== "string") return undefined;
+    return HORIZON_OP_TYPE_TO_FAMILY[record.type];
+  }
+
+  /**
+   * Derives a {@link DedupeEventRef} from a raw Horizon operation record
+   * (issue 6.13), for the two families - `payment`, `trustlineAuth` - that
+   * could also arrive via the unified transport.
+   *
+   * `index` uses the operation's own Horizon `id` as-is. Horizon's `id` is
+   * the operation-level TOID (total-order ID; ledger, transaction, and
+   * operation position packed into one value) - and Soroban RPC's unified
+   * event `id` carries that same TOID as its leading segment (see
+   * {@link deriveUnifiedDedupeRef}). Treating both as an opaque shared value
+   * this way means neither side needs to decode the TOID's internal bit
+   * layout to agree on it. It must stay a `BigInt`-derived string, never
+   * `Number(id)`: a TOID exceeds `Number.MAX_SAFE_INTEGER` past ledger
+   * ~2,097,152, which both testnet and pubnet are well past today, and
+   * `Number()` silently collapses distinct operations in the same
+   * transaction onto the same key rather than just losing precision benignly.
+   *
+   * Returns `undefined` when the record lacks either field, so the caller
+   * skips the dedupe check entirely for that event rather than guessing.
+   */
+  private deriveHorizonDedupeRef(record: unknown): DedupeEventRef | undefined {
+    if (!this.isRecord(record)) return undefined;
+    const txHash = record.transaction_hash;
+    const id = record.id;
+    if (typeof txHash !== "string" || typeof id !== "string") return undefined;
+    let index: string;
+    try {
+      index = BigInt(id).toString();
+    } catch {
+      return undefined;
+    }
+    return { txHash, index };
+  }
+
+  /**
+   * Derives a {@link DedupeEventRef} from a raw unified-transport event
+   * (issue 6.13). `index` is the leading segment of the event's own `id`
+   * (Soroban RPC's documented `<toid>-<eventIndex>` format) - the same
+   * operation-level TOID {@link deriveHorizonDedupeRef} reads directly off
+   * a Horizon record's `id`. See that method's doc for the shared-opaque-
+   * value reasoning and why it must round-trip through `BigInt`, not
+   * `Number`. `BigInt(...).toString()` also normalizes the unified stream's
+   * zero-padded TOID prefix against Horizon's unpadded form, so the two
+   * sides agree even though their wire representations differ.
+   */
+  private deriveUnifiedDedupeRef(raw: SorobanRpcEvent): DedupeEventRef | undefined {
+    if (typeof raw.txHash !== "string") return undefined;
+    const prefix = raw.id.split("-")[0];
+    if (prefix === undefined) return undefined;
+    let index: string;
+    try {
+      index = BigInt(prefix).toString();
+    } catch {
+      return undefined;
+    }
+    return { txHash: raw.txHash, index };
   }
 
   async healthCheck(thresholdMs = 5 * 60 * 1000): Promise<HealthCheckResult> {
@@ -1002,6 +1430,36 @@ export class EventEngine {
       if (this.sorobanSubscriber) {
         await this.sorobanSubscriber.stop();
       }
+
+      if (this.unifiedController) {
+        this.unifiedController.abort();
+        this.unifiedController = undefined;
+      }
+      if (this.unifiedPollPromise) {
+        try {
+          await this.unifiedPollPromise;
+        } catch (err) {
+          this.log.warn("[pulse-core] unified poller did not shut down cleanly.", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        this.unifiedPollPromise = undefined;
+      }
+      // The poller has stopped, but its last cursor write may still be in
+      // flight. Shutting down without it means the next start replays events
+      // that were already delivered. Only awaited when a write was actually
+      // queued, so engines with no unified poller keep stopping synchronously.
+      const pendingCursorWrites = this.flushUnifiedCursorWrites();
+      if (pendingCursorWrites) {
+        try {
+          await pendingCursorWrites;
+        } catch (err) {
+          this.log.warn("[pulse-core] a unified cursor write did not settle before stop.", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      this.unifiedRunning = false;
     }
 
     // Shared regardless of mode: `this.registry`/`this.contractRegistry` hold
@@ -1019,9 +1477,269 @@ export class EventEngine {
   }
 
   /**
+   * Starts the CAP-67 unified event poller (`SorobanRpcClient.pollUnifiedEvents`)
+   * as a first-class transport, alongside Horizon SSE and the Soroban
+   * subscriber. Emits the same `engine.reconnecting` / `engine.rate_limited` /
+   * `engine.reconnected` lifecycle notifications Horizon's stream does, tagged
+   * `source: "unified"`. No-op if already running or unconfigured.
+   *
+   * Decoding, normalizing, and dispatching the polled events to watchers
+   * (issue 6.12) only happens once `this.effectiveIngestion` - resolved
+   * right before this method is called from `start()` - is `"unified"`;
+   * otherwise (including the default `"horizon"` mode) this keeps doing what
+   * it always did: track the transport's lifecycle (start/stop/status/
+   * reconnect) and `unifiedLastEventAt`, without touching any watcher.
+   */
+  private startUnifiedPoller(): void {
+    if (!this.unifiedRpc || this.unifiedRunning) return;
+
+    const rpc = this.unifiedRpc;
+    const controller = new AbortController();
+    this.unifiedController = controller;
+    this.unifiedRunning = true;
+
+    this.unifiedPollPromise = this.resolveUnifiedCursor()
+      .then((cursor) =>
+        rpc.pollUnifiedEvents(
+          (events) => {
+            this.unifiedLastEventAt = new Date().toISOString();
+            this.log.debug?.("[pulse-core] unified transport received events", {
+              count: events.length,
+            });
+            if (this.effectiveIngestion !== "unified") return;
+            for (const raw of events) {
+              this.dispatchUnifiedEvent(raw);
+            }
+          },
+          {
+            signal: controller.signal,
+            cursor,
+            onCursor: (nextCursor) => this.enqueueUnifiedCursorWrite(nextCursor),
+            onRetry: ({ attempt, delayMs, rateLimited }) => {
+              const type = rateLimited ? "engine.rate_limited" : "engine.reconnecting";
+              this.log.warn(`[pulse-core] unified transport ${type.split(".")[1]}.`, {
+                attempt,
+                delayMs,
+              });
+              this.notifyWatchers(type, {
+                type,
+                attempt,
+                delayMs,
+                source: "unified",
+                emittedAt: new Date().toISOString(),
+              });
+            },
+            onRecovered: ({ attempt }) => {
+              this.log.info("[pulse-core] unified transport reconnect succeeded.", { attempt });
+              this.notifyWatchers("engine.reconnected", {
+                type: "engine.reconnected",
+                attempt,
+                source: "unified",
+                emittedAt: new Date().toISOString(),
+              });
+            },
+          },
+        ),
+      )
+      .finally(() => {
+        this.unifiedRunning = false;
+      });
+  }
+
+  /**
+   * Decodes, normalizes, and routes one raw unified-transport event (issue
+   * 6.12). Only called once `this.effectiveIngestion === "unified"`.
+   *
+   * `transfer`/`mint`/`burn` all become a pending `payment.*` event fed
+   * through `route()`'s existing bidirectional resolution (the same path a
+   * Horizon `payment` record takes) rather than through
+   * `normalizeUnifiedTransfer`/`Mint`/`Burn` directly - those normalizers
+   * each resolve to a single fixed perspective (documented on
+   * `normalizeUnifiedTransfer`, e.g., as out of scope for that module), while
+   * `route()` already knows how to notify both a sender's and a recipient's
+   * watcher from one event and handle the self-payment case, and reusing it
+   * keeps CAP-67-sourced payments indistinguishable from Horizon-sourced ones
+   * downstream. `set_authorized` has no such ambiguity - it already resolves
+   * to one fixed `trustline.authorized`/`.deauthorized` type that `route()`
+   * dispatches directly - so `normalizeUnifiedSetAuthorized` is used as-is.
+   *
+   * `clawback` and `fee` are decoded by neither this method nor any other
+   * caller today: both are new-in-CAP-67 event kinds with no Horizon-side
+   * family to route away from (see `EventFamily`/`UNIFIED_EQUIVALENT_FAMILIES`
+   * in `index.ts`), so wiring their dispatch is follow-up work outside this
+   * issue's routing scope, not a prerequisite for it.
+   */
+  private dispatchUnifiedEvent(raw: SorobanRpcEvent): void {
+    const topic = raw.topic ?? raw.topics;
+    if (!Array.isArray(topic) || !topic.every((t): t is string => typeof t === "string")) {
+      this.log.warn("[pulse-core] unified transport received an event with malformed topics.", {
+        eventId: raw.id,
+      });
+      return;
+    }
+
+    const event = { topic, value: raw.value } as Pick<RawSorobanEvent, "topic" | "value">;
+    const ledgerClosedAt = raw.ledgerClosedAt ?? new Date().toISOString();
+    const symbol = this.peekUnifiedEventSymbol(topic[0]);
+    if (symbol === undefined) {
+      this.log.warn(
+        "[pulse-core] unified transport received an event whose topic[0] isn't a decodable symbol.",
+        { eventId: raw.id },
+      );
+      return;
+    }
+
+    const makeError = (reason: string) => new Error(reason);
+    // Dedupe (issue 6.13): `payment`/`trustlineAuth` are the only families
+    // that could also arrive via Horizon, so this is the only ref worth
+    // deriving here - every symbol below produces one of those two.
+    const dedupeRef = this.deriveUnifiedDedupeRef(raw);
+
+    try {
+      switch (symbol) {
+        case "transfer": {
+          const transfer = decodeUnifiedTransfer(event);
+          const asset = transfer.asset === "native" ? "XLM" : transfer.asset;
+          const pending = withTimestampDate({
+            type: "unknown" as const,
+            to: toPaymentAddress(transfer.to, makeError),
+            from: toPaymentAddress(transfer.from, makeError),
+            amount: fromBigInt(transfer.amount),
+            asset,
+            timestamp: ledgerClosedAt,
+            ...(transfer.memo !== undefined ? { memo: transfer.memo } : {}),
+          });
+          if (dedupeRef)
+            this.dedupeKeyByEvent.set(pending, {
+              key: deriveDedupeKey(dedupeRef),
+              transport: "unified",
+            });
+          this.route(pending);
+          return;
+        }
+        case "mint": {
+          const mint = decodeUnifiedMint(event);
+          const pending = withTimestampDate({
+            type: "unknown" as const,
+            to: toPaymentAddress(mint.to, makeError),
+            from: issuerFromAsset(mint.asset, makeError),
+            amount: fromBigInt(mint.amount),
+            asset: mint.asset,
+            timestamp: ledgerClosedAt,
+          });
+          if (dedupeRef)
+            this.dedupeKeyByEvent.set(pending, {
+              key: deriveDedupeKey(dedupeRef),
+              transport: "unified",
+            });
+          this.route(pending);
+          return;
+        }
+        case "burn": {
+          const burn = decodeUnifiedBurn(event);
+          const pending = withTimestampDate({
+            type: "unknown" as const,
+            to: issuerFromAsset(burn.asset, makeError),
+            from: toPaymentAddress(burn.from, makeError),
+            amount: fromBigInt(burn.amount),
+            asset: burn.asset,
+            timestamp: ledgerClosedAt,
+          });
+          if (dedupeRef)
+            this.dedupeKeyByEvent.set(pending, {
+              key: deriveDedupeKey(dedupeRef),
+              transport: "unified",
+            });
+          this.route(pending);
+          return;
+        }
+        case "set_authorized": {
+          const setAuthorized = decodeUnifiedSetAuthorized(event);
+          const normalized = normalizeUnifiedSetAuthorized(setAuthorized, ledgerClosedAt);
+          if (dedupeRef)
+            this.dedupeKeyByEvent.set(normalized, {
+              key: deriveDedupeKey(dedupeRef),
+              transport: "unified",
+            });
+          this.route(normalized);
+          return;
+        }
+        default:
+          // clawback, fee, or any other well-formed-but-unhandled symbol -
+          // not wired for #12's routing scope (see this method's docstring).
+          // A malformed/undecodable topic[0] is caught above, before this
+          // switch, and logged there instead.
+          return;
+      }
+    } catch (err) {
+      this.log.warn("[pulse-core] failed to decode/normalize a unified transport event.", {
+        eventId: raw.id,
+        symbol,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** Decodes topic[0] as a Soroban symbol, or `undefined` if it isn't one. */
+  private peekUnifiedEventSymbol(topic0: string | undefined): string | undefined {
+    if (topic0 === undefined) return undefined;
+    try {
+      const native = scValToNative(xdr.ScVal.fromXDR(topic0, "base64"));
+      return typeof native === "string" ? native : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async resolveUnifiedCursor(): Promise<string | undefined> {
+    if (!this.cursorStore) return undefined;
+    try {
+      return (await this.cursorStore.get(this.unifiedCursorKey)) ?? undefined;
+    } catch (err) {
+      this.log.warn("[pulse-core] cursorStore.get() failed during unified poller startup.", {
+        key: this.unifiedCursorKey,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Queues a unified-cursor write behind any already in flight.
+   *
+   * Serialising them matters for stores whose writes can complete out of order
+   * (Postgres, Redis, and the filesystem under load): two concurrent `set()`
+   * calls could otherwise leave the OLDER cursor persisted, which on the next
+   * restart replays events that were already delivered.
+   */
+  private enqueueUnifiedCursorWrite(cursor: string): void {
+    const previous = this.unifiedCursorWrites ?? Promise.resolve();
+    this.unifiedCursorWrites = previous.then(() => this.persistUnifiedCursor(cursor));
+  }
+
+  /**
+   * Resolves once every queued cursor write has settled, or immediately (and
+   * synchronously, without yielding) when none were ever queued.
+   */
+  private flushUnifiedCursorWrites(): Promise<void> | null {
+    return this.unifiedCursorWrites;
+  }
+
+  private async persistUnifiedCursor(cursor: string): Promise<void> {
+    if (!this.cursorStore || this.isCursorStoreUnhealthy) return;
+    try {
+      await this.cursorStore.set(this.unifiedCursorKey, cursor);
+      this.consecutiveCursorFailures = 0;
+      this.isCursorStoreUnhealthy = false;
+    } catch (err) {
+      this.handleCursorFailure(err, this.unifiedCursorKey);
+    }
+  }
+
+  /**
    * Returns the current status of the event engine.
    * Reports top-level aggregated status as well as individual source status
-   * for both Horizon and Soroban subscribers.
+   * for Horizon, the Soroban subscriber, and the CAP-67 unified poller.
    */
   status(): EngineStatus {
     if (this.networkSources) {
@@ -1030,11 +1748,14 @@ export class EventEngine {
       let reconnectAttempt = 0;
       let horizonRunning = false;
       let sorobanRunning = false;
+      let unifiedRunning = false;
       let horizonReconnectAttempt = 0;
       const lastEventAt: string[] = [];
       const horizonLastEventAt: string[] = [];
       const sorobanLastEventAt: string[] = [];
+      const unifiedLastEventAt: string[] = [];
       const pausedSources = new Set<"horizon" | "soroban">();
+      let effectiveIngestion: "unified" | "horizon" = "horizon";
 
       for (const [network, subEngine] of this.networkSources) {
         const subStatus = subEngine.status();
@@ -1044,9 +1765,11 @@ export class EventEngine {
         reconnectAttempt = Math.max(reconnectAttempt, subStatus.reconnectAttempt);
         if (subStatus.lastEventAt) lastEventAt.push(subStatus.lastEventAt);
         subStatus.pausedSources?.forEach((source) => pausedSources.add(source));
+        if (subStatus.effectiveIngestion === "unified") effectiveIngestion = "unified";
 
         horizonRunning = horizonRunning || subStatus.sources.horizon.running;
         sorobanRunning = sorobanRunning || subStatus.sources.soroban.running;
+        unifiedRunning = unifiedRunning || subStatus.sources.unified.running;
         horizonReconnectAttempt = Math.max(
           horizonReconnectAttempt,
           subStatus.sources.horizon.reconnectAttempt,
@@ -1056,6 +1779,9 @@ export class EventEngine {
         }
         if (subStatus.sources.soroban.lastEventAt) {
           sorobanLastEventAt.push(subStatus.sources.soroban.lastEventAt);
+        }
+        if (subStatus.sources.unified.lastEventAt) {
+          unifiedLastEventAt.push(subStatus.sources.unified.lastEventAt);
         }
       }
 
@@ -1068,6 +1794,8 @@ export class EventEngine {
           : null,
         reconnectAttempt,
         pausedSources: pausedSources.size > 0 ? Array.from(pausedSources) : undefined,
+        ingestion: this.ingestion,
+        effectiveIngestion,
         sources: {
           horizon: {
             running: horizonRunning,
@@ -1080,6 +1808,13 @@ export class EventEngine {
             running: sorobanRunning,
             lastEventAt: sorobanLastEventAt.length
               ? (sorobanLastEventAt.sort()[sorobanLastEventAt.length - 1] ?? null)
+              : null,
+            reconnectAttempt: 0,
+          },
+          unified: {
+            running: unifiedRunning,
+            lastEventAt: unifiedLastEventAt.length
+              ? (unifiedLastEventAt.sort()[unifiedLastEventAt.length - 1] ?? null)
               : null,
             reconnectAttempt: 0,
           },
@@ -1101,18 +1836,26 @@ export class EventEngine {
       reconnectAttempt: 0,
     };
 
-    const sources = { horizon, soroban };
-    const lastEventAt = [horizon.lastEventAt, soroban.lastEventAt].filter(
+    const unified = {
+      running: this.unifiedRunning,
+      lastEventAt: this.unifiedLastEventAt,
+      reconnectAttempt: 0,
+    };
+
+    const sources = { horizon, soroban, unified };
+    const lastEventAt = [horizon.lastEventAt, soroban.lastEventAt, unified.lastEventAt].filter(
       (value): value is string => value !== null,
     );
 
     return {
-      running: horizon.running || soroban.running,
+      running: horizon.running || soroban.running || unified.running,
       watcherCount: this.registry.size,
       contractWatcherCount: this.contractRegistry.size,
       lastEventAt: lastEventAt.length ? (lastEventAt.sort()[lastEventAt.length - 1] ?? null) : null,
       reconnectAttempt: Math.max(horizon.reconnectAttempt, soroban.reconnectAttempt),
       pausedSources: this.pausedSources.size > 0 ? Array.from(this.pausedSources) : undefined,
+      ingestion: this.ingestion,
+      effectiveIngestion: this.effectiveIngestion,
       sources,
     };
   }
@@ -1152,7 +1895,31 @@ export class EventEngine {
         }
 
         this.lastEventAt = event.timestamp;
-        this.route(event);
+
+        // Transport routing (issue 6.12): a family the unified transport is
+        // actively claiming under the resolved effective mode is suppressed
+        // here so the same real-world event isn't delivered twice - once via
+        // Horizon, once via `dispatchUnifiedEvent()`. `lastEventAt` above
+        // still updates regardless, since Horizon's stream is genuinely
+        // healthy either way.
+        const family = this.horizonEventFamily(record);
+        if (family && resolveFamilyTransport(family, this.effectiveIngestion) === "unified") {
+          return;
+        }
+
+        // Dedupe (issue 6.13): only `payment`/`trustlineAuth` can arrive via
+        // either transport, so only those need a key at all.
+        if (family === "payment" || family === "trustlineAuth") {
+          const ref = this.deriveHorizonDedupeRef(record);
+          if (ref) {
+            this.dedupeKeyByEvent.set(event, {
+              key: deriveDedupeKey(ref),
+              transport: "horizon",
+            });
+          }
+        }
+
+        this.enqueueEvent(event);
       },
       onerror: (error) => {
         this.log.error("[pulse-core] SSE error.", { error });
@@ -1162,7 +1929,11 @@ export class EventEngine {
 
     const streamEpoch = ++this.streamEpoch;
     if (!this.cursorStore) {
-      this.stopStream = this.server.operations().cursor("now").stream(callbacks);
+      this.stopStream = this.server
+        .operations()
+        .join("transactions")
+        .cursor("now")
+        .stream(callbacks);
       return;
     }
 
@@ -1172,8 +1943,138 @@ export class EventEngine {
       }
 
       this.horizonCursor = streamCursor;
-      this.stopStream = this.server.operations().cursor(streamCursor).stream(callbacks);
+      this.stopStream = this.server
+        .operations()
+        .join("transactions")
+        .cursor(streamCursor)
+        .stream(callbacks);
     });
+  }
+
+  /** Which ingestion source an event came from, for pause gating. */
+  private sourceOf(event: Timestamped<NormalizedEventOrPending>): "horizon" | "soroban" {
+    return event.type === "contract.invoked" || event.type === "contract.emitted"
+      ? "soroban"
+      : "horizon";
+  }
+
+  private enqueueEvent(event: Timestamped<NormalizedEventOrPending>): void {
+    // A paused source contributes nothing - not even queue depth. `route()`
+    // already discards these at the far end, so dropping them here changes no
+    // delivery behaviour; it only stops a paused source's events accumulating.
+    //
+    // Without this the "pause" policy - the default - pauses both sources and
+    // then keeps queueing every record they go on delivering, because
+    // `pauseSource()` only adds to a Set consulted at routing time and never
+    // stops ingestion. A 10k burst through a slow watcher grew the queue to
+    // 9,999 entries instead of stopping at the high-water mark: precisely the
+    // unbounded-memory failure this queue exists to prevent. Covered by
+    // `test/EventEngine.backpressure.test.ts`.
+    if (this.pausedSources.has(this.sourceOf(event))) {
+      return;
+    }
+
+    // If over capacity, apply configured policy.
+    if (this.eventQueue.length >= this.queueHighWaterMark) {
+      if (this.queuePolicy === "pause") {
+        if (!this.inBackpressure) {
+          this.inBackpressure = true;
+          // Pause sources to prevent further incoming events.
+          try {
+            this.pauseSource("horizon");
+            this.pauseSource("soroban");
+            this.wePausedSourcesForBackpressure = true;
+          } catch {
+            /* swallow - pauseSource logs */
+          }
+          this.notifyWatchers("engine.backpressure", {
+            type: "engine.backpressure",
+            attempt: 0,
+            emittedAt: new Date().toISOString(),
+            active: true,
+            queued: this.eventQueue.length,
+            policy: this.queuePolicy,
+          } as any);
+        }
+        // Still accept the event so in-flight sources pause and we can drain.
+        this.eventQueue.push(event);
+      } else if (this.queuePolicy === "drop-oldest") {
+        // Drop one oldest then push
+        this.eventQueue.shift();
+        this.eventQueue.push(event);
+        if (!this.inBackpressure) {
+          this.inBackpressure = true;
+          this.notifyWatchers("engine.backpressure", {
+            type: "engine.backpressure",
+            attempt: 0,
+            emittedAt: new Date().toISOString(),
+            active: true,
+            queued: this.eventQueue.length,
+            policy: this.queuePolicy,
+          } as any);
+        }
+      } else {
+        // drop-newest: ignore incoming
+        if (!this.inBackpressure) {
+          this.inBackpressure = true;
+          this.notifyWatchers("engine.backpressure", {
+            type: "engine.backpressure",
+            attempt: 0,
+            emittedAt: new Date().toISOString(),
+            active: true,
+            queued: this.eventQueue.length,
+            policy: this.queuePolicy,
+          } as any);
+        }
+        return;
+      }
+    } else {
+      this.eventQueue.push(event);
+    }
+
+    // Kick the async processor
+    this.processQueue().catch((err) => {
+      this.log.error("[pulse-core] event queue processor failed", { error: err });
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.processingQueue) return;
+    this.processingQueue = true;
+    try {
+      while (this.eventQueue.length > 0) {
+        const ev = this.eventQueue.shift()!;
+        try {
+          this.route(ev);
+        } catch (err) {
+          this.log.warn("[pulse-core] watcher handler threw while routing event", { error: err });
+        }
+
+        // Clear backpressure if we're below low watermark
+        if (this.inBackpressure && this.eventQueue.length <= this.queueLowWaterMark) {
+          this.inBackpressure = false;
+          if (this.wePausedSourcesForBackpressure) {
+            try {
+              this.resumeSource("horizon");
+              this.resumeSource("soroban");
+            } catch {
+              /* swallow */
+            }
+            this.wePausedSourcesForBackpressure = false;
+          }
+          this.notifyWatchers("engine.backpressure", {
+            type: "engine.backpressure",
+            attempt: 0,
+            emittedAt: new Date().toISOString(),
+            active: false,
+            queued: this.eventQueue.length,
+            policy: this.queuePolicy,
+          } as any);
+        }
+      }
+    } finally {
+      this.processingQueue = false;
+    }
   }
 
   private getHorizonCursor(record: unknown): string | null {
@@ -1434,6 +2335,38 @@ export class EventEngine {
     return name !== undefined ? `${name} (${key})` : `address ${key}`;
   }
 
+  /**
+   * Transaction-identity fields for a classic Horizon operation record.
+   *
+   * `transaction_hash` is on every operation record Horizon returns.
+   * `ledger` and `memo` live on the transaction, not the operation, so they
+   * are only present when the stream asked for `join=transactions` (see
+   * `openStream`). Each field is omitted rather than set to `undefined` so a
+   * normalized event never carries a key it has no value for.
+   */
+  private classicIdentity(r: Record<string, unknown>): ClassicEventIdentity {
+    const identity: ClassicEventIdentity = {};
+
+    if (typeof r.transaction_hash === "string" && r.transaction_hash !== "") {
+      identity.txHash = r.transaction_hash;
+    }
+
+    const tx = r.transaction;
+    if (typeof tx === "object" && tx !== null) {
+      const joined = tx as Record<string, unknown>;
+      if (typeof joined.ledger === "number") {
+        identity.ledger = joined.ledger;
+      }
+      // Horizon reports an absent memo as memo_type "none", with `memo` either
+      // null or missing - neither is a memo a consumer can correlate on.
+      if (joined.memo_type !== "none" && typeof joined.memo === "string" && joined.memo !== "") {
+        identity.memo = joined.memo;
+      }
+    }
+
+    return identity;
+  }
+
   private normalize(record: unknown): Timestamped<NormalizedEventOrPending> | null {
     const result = this._normalize(record);
     return result ? withTimestampDate(result) : null;
@@ -1466,6 +2399,7 @@ export class EventEngine {
         amount: toStellarAmount(r.amount as string),
         asset,
         timestamp: r.created_at as string,
+        ...this.classicIdentity(r),
         raw: record as RawHorizonPayment,
       };
     }
@@ -1500,6 +2434,7 @@ export class EventEngine {
         source: toAccountAddress(r.account as string),
         destination: toAccountAddress(r.into as string),
         timestamp: r.created_at as string,
+        ...this.classicIdentity(r),
         raw: record as RawHorizonAccountMerge,
       };
     }
@@ -1582,6 +2517,7 @@ export class EventEngine {
       price: r.price as string,
       price_r: r.price_r as PriceR,
       timestamp: r.created_at,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonManageSellOffer | RawHorizonManageBuyOffer,
     };
   }
@@ -1604,6 +2540,7 @@ export class EventEngine {
       account: toAccountAddress(r.account),
       starting_balance: r.starting_balance,
       timestamp: r.created_at,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonCreateAccount,
     };
   }
@@ -1620,6 +2557,7 @@ export class EventEngine {
       source: toAccountAddress(r.source_account),
       bump_to: r.bump_to as string,
       timestamp: r.created_at,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonBumpSequence,
     };
   }
@@ -1661,6 +2599,7 @@ export class EventEngine {
       value,
       decoded,
       timestamp: typeof r.created_at === "string" ? r.created_at : "",
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonManageData,
     };
   }
@@ -1691,6 +2630,7 @@ export class EventEngine {
       asset,
       limit,
       timestamp: r.created_at,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonChangeTrust,
     };
   }
@@ -1746,6 +2686,7 @@ export class EventEngine {
       source: toAccountAddress(r.source_account as string),
       changes,
       timestamp: r.created_at as string,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonSetOptions,
     };
   }
@@ -1799,6 +2740,7 @@ export class EventEngine {
       asset,
       amount: toStellarAmount(r.amount as string),
       timestamp: r.created_at as string,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonCreateClaimableBalance,
     };
   }
@@ -1825,6 +2767,7 @@ export class EventEngine {
       claimant: toAccountAddress(r.source_account as string),
       balanceId: r.balance_id as string,
       timestamp: r.created_at as string,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonClaimClaimableBalance,
     };
   }
@@ -1867,6 +2810,7 @@ export class EventEngine {
       reserves_deposited: r.reserves_deposited as LiquidityPoolReserve[],
       shares_received: r.shares_received as string,
       timestamp: r.created_at as string,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonLiquidityPoolDeposit,
     };
   }
@@ -1904,6 +2848,7 @@ export class EventEngine {
       reserves_received: r.reserves_received as LiquidityPoolReserve[],
       shares_redeemed: r.shares as string,
       timestamp: r.created_at as string,
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonLiquidityPoolWithdraw,
     };
   }
@@ -1932,6 +2877,7 @@ export class EventEngine {
       asset,
       timestamp: r.created_at,
       operation: "allow_trust",
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonAllowTrust,
     };
   }
@@ -1968,6 +2914,7 @@ export class EventEngine {
       asset,
       timestamp: r.created_at,
       operation: "set_trust_line_flags",
+      ...this.classicIdentity(r),
       raw: raw as RawHorizonSetTrustLineFlags,
     };
   }
@@ -1997,12 +2944,15 @@ export class EventEngine {
   ): Raw<ContractEmittedEvent> | null {
     if (typeof r.contract_id !== "string" || r.contract_id === "") return null;
     if (typeof r.created_at !== "string") return null;
+    const topics = Array.isArray(r.topics) ? (r.topics as string[]) : [];
+    const semantic = this.resolveSemantic(r.contract_id, topics, r.data);
     return {
       type: "contract.emitted",
       contractId: toContractAddress(r.contract_id),
-      topics: Array.isArray(r.topics) ? (r.topics as string[]) : [],
+      topics,
       data: r.data ?? null,
       decodedData: r.decodedData,
+      ...(semantic ? { semantic } : {}),
       ...(typeof r.ledger === "number" ? { ledger: r.ledger } : {}),
       ...(typeof r.eventId === "string"
         ? { eventId: r.eventId }
@@ -2064,6 +3014,7 @@ export class EventEngine {
     }
 
     if (event.type === "contract.emitted") {
+      const semantic = this.resolveSemantic(event.contractId, event.topic ?? [], event.value);
       this.route(
         withTimestampDate({
           type: "contract.emitted",
@@ -2071,6 +3022,7 @@ export class EventEngine {
           topics: event.topic,
           data: event.decodedData ?? event.value,
           decodedData: event.decodedData,
+          ...(semantic ? { semantic } : {}),
           ...(event.ledger !== undefined ? { ledger: event.ledger } : {}),
           eventId: event.id,
           ...(event.txHash !== undefined ? { txHash: event.txHash } : {}),
@@ -2158,6 +3110,17 @@ export class EventEngine {
   }
 
   private route(event: Timestamped<NormalizedEventOrPending>): void {
+    // Dedupe (issue 6.13): suppress a second delivery of the same on-chain
+    // movement observed via both transports during a routing transition.
+    // Only `payment`/`trustlineAuth`-family events ever carry a key at all
+    // (see `dedupeKeyByEvent`'s doc) - every other event is a no-op here.
+    // Suppression is cross-transport only; a repeat key from the same
+    // transport is a distinct movement within one operation, not a duplicate.
+    const dedupe = this.dedupeKeyByEvent.get(event);
+    if (dedupe !== undefined && this.dedupeWindow.seenFrom(dedupe.key, dedupe.transport)) {
+      return;
+    }
+
     // Check if Soroban source is paused for contract events
     if (
       (event.type === "contract.invoked" || event.type === "contract.emitted") &&
@@ -2350,7 +3313,7 @@ export class EventEngine {
               (event as ContractEmittedEvent).decodedData = undefined;
               this.emitDecodeFailedNotification(
                 event,
-                `No ABI spec found for contract ${contractId}`,
+                `No ABI spec found for contract ${contractId}; publish an ABI spec through the registry or follow issue #8.1 for guidance.`,
               );
             }
             this.dispatchContractEvent(event);

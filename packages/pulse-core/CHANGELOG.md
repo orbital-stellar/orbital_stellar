@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- **`GalexieHistoricalSource`** - a `HistoricalSource` that reads contract events from a Galexie ledger export (SEP-54 layout), so `replayContracts({ historicalSource })` can replay ledgers older than any RPC's retention. It answers `getEvents` exactly as Stellar RPC does: event IDs and order, cursors, the 10,000-ledger scan window, filters, and both `xdrFormat`s. Checked against mainnet RPC for every event in seven ledgers, with a real mainnet ledger and RPC's answer for it kept as a test fixture. Reads the public AWS Open Data mainnet export or any self-hosted one. Each scanned ledger is one download, so long sparse replays are expensive; see the class docs.
+- `scValToXdrJson` / `escapeSep51` - render an `ScVal` in Stellar RPC's `xdrFormat: "json"` shape (the Rust `stellar-xdr` serde output).
+
+### Changed
+- `@stellar/stellar-sdk` is now `^16.4.1` across the workspace. 16.2.0 cannot decode mainnet ledgers from protocol 30 (`unknown StellarValueType member for value 3`).
+
+## [0.2.0] - 2026-09-23
+
 ### Breaking Changes
 - **`CoreConfig.abiRegistry` now defaults to an active registry client instead of `undefined`.** Previously, omitting `abiRegistry` meant no ABI lookup ever happened and `contract.emitted` events were dispatched synchronously. Now, omitting it resolves `@orbital-stellar/abi-registry`'s bundled well-known specs (USDC, EURC, AQUA, the native XLM wrapper) by default - and, once Orbital's on-chain registry contract is deployed, that too. This means:
   - `decodedData` now populates automatically for those well-known contracts with zero configuration.
@@ -13,7 +22,6 @@
 
 ### Added
 - `orbital typegen <contractId>` CLI command - generates TypeScript interfaces + Zod schemas for a deployed Soroban contract, resolving its spec from the on-chain registry first and falling back to live WASM auto-discovery.
-- **`HistoricalSource` interface (issue #920 / "12.6") - design-stage, not wired into `EventEngine`.** A standalone contract for beyond-RPC-retention replay sources, plus `RetentionBoundaryError` (names the requested ledger, the retention boundary, and the configured source). One reference adapter, `GalexieHistoricalSource`, reads Galexie-exported ledger data from an object-storage bucket. **Not integrated with `EventEngine`/`CursorStore`** - this issue's own named prerequisites (transport routing, a unified cursor format) don't exist in this repo yet, so wiring it in now would mean guessing at both. See `docs/design/long-range-replay.md` for the source-selection tradeoff analysis (not maintainer-signed-off) and the `GalexieHistoricalSource` module doc comment for exactly which parts (object-key layout, XDR accessor names) are unverified against a live bucket.
 
 ## [0.1.0] - 2026-05-28
 

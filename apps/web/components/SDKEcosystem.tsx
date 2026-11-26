@@ -4,44 +4,57 @@ import { useState } from 'react'
 
 const PACKAGES = [
   {
+    pkg: '@orbital-stellar/pulse-core',
+    title: 'Pulse Core',
+    description: 'EventEngine — Horizon, Soroban and CAP-67 ingestion, normalization, reconnection, cursor persistence.',
+    npmName: 'pulse-core',
+    status: 'Live' as const,
+  },
+  {
     pkg: '@orbital-stellar/pulse-webhooks',
     title: 'Pulse Webhooks',
-    description: 'Signed webhook delivery with retries, secrets, and delivery logs for your server.',
+    description: 'HMAC-signed webhook delivery + verification (Node and edge), durable retry and dead-letter queues, metrics.',
+    npmName: 'pulse-webhooks',
     status: 'Live' as const,
   },
   {
     pkg: '@orbital-stellar/pulse-notify',
     title: 'Pulse Notify',
     description: 'React hooks for real-time Stellar events. Drop in, subscribe, done.',
+    npmName: 'pulse-notify',
     status: 'Live' as const,
   },
   {
-    pkg: '@orbital-stellar/hooks',
-    title: 'Stellar Hooks',
-    description: 'useAccount, useTransaction, useBalance and more data hooks for React.',
-    status: 'Coming soon' as const,
+    pkg: '@orbital-stellar/abi-registry',
+    title: 'ABI Registry',
+    description: 'Registry clients, WASM spec discovery, codegen, schema verification, semantic taxonomy, signed attestations.',
+    npmName: 'abi-registry',
+    status: 'Live' as const,
   },
   {
-    pkg: '@orbital-stellar/auth',
-    title: 'Auth SDK',
-    description: 'Embedded wallets, passkeys, and fee sponsorship for Stellar apps.',
-    status: 'Coming soon' as const,
+    pkg: '@orbital-stellar/orbital-indexer',
+    title: 'Orbital Indexer',
+    description: 'Auto-publish indexer — fills the on-chain registry as part of normal engine operation.',
+    npmName: 'orbital-indexer',
+    status: 'Live' as const,
   },
   {
-    pkg: '@orbital-stellar/payments',
-    title: 'Payments SDK',
-    description: 'Send, receive, swap and programmable payroll on Stellar.',
-    status: 'Coming soon' as const,
+    pkg: '@orbital-stellar/anchor-sdk',
+    title: 'Anchor SDK',
+    description: 'Typed, schema-validated clients for SEP-1, SEP-10, SEP-12, SEP-24 and SEP-31.',
+    npmName: 'anchor-sdk',
+    status: 'Live' as const,
   },
   {
-    pkg: '@orbital-stellar/testing',
-    title: 'Testing Utils',
-    description: 'Mock Horizon responses and local testnet helpers for CI.',
-    status: 'Coming soon' as const,
+    pkg: '@orbital-stellar/worker-core',
+    title: 'Worker Core',
+    description: 'Worker runtime — triggers, schedules, subscriptions, guard rails, verification, reputation; no custody.',
+    npmName: 'worker-core',
+    status: 'Live' as const,
   },
 ]
 
-function Card({ pkg, title, description, status }: typeof PACKAGES[0]) {
+function Card({ pkg, title, description, npmName, status }: typeof PACKAGES[0]) {
   const [hovered, setHovered] = useState(false)
   return (
     <div
@@ -56,15 +69,19 @@ function Card({ pkg, title, description, status }: typeof PACKAGES[0]) {
         transition: 'border-color 0.15s',
       }}
     >
-      <p
+      <a
+        href={`https://www.npmjs.com/package/@orbital-stellar/${npmName}`}
+        target="_blank"
+        rel="noopener noreferrer"
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: '12px',
           color: 'var(--muted)',
+          textDecoration: 'none',
         }}
       >
         {pkg}
-      </p>
+      </a>
       <p
         style={{
           fontFamily: 'var(--font-sans)',
@@ -92,11 +109,11 @@ function Card({ pkg, title, description, status }: typeof PACKAGES[0]) {
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: '12px',
-          color: status === 'Live' ? 'var(--accent)' : 'var(--muted)',
+          color: 'var(--accent)',
           marginTop: '20px',
         }}
       >
-        {status === 'Live' ? '● Live' : '○ Soon'}
+        ● Live
       </p>
     </div>
   )
@@ -123,7 +140,7 @@ export default function SDKEcosystem() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
             gap: '1px',
             background: 'var(--border)',
           }}

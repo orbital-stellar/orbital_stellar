@@ -11,9 +11,12 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { TtlLruCache, DEFAULT_MAX_CACHE_SIZE, DEFAULT_CACHE_TTL_MS } from "./TtlLruCache.js";
-import { validateSpec } from "./spec.js";
+import { validateSpec, canonicalizeSpec } from "./spec.js";
 import type { ContractSpec } from "./spec.js";
 
+/**
+ * Configuration options for {@link OnChainAbiRegistryClient}.
+ */
 export type OnChainAbiRegistryClientConfig = {
   /** The deployed registry contract's ID (see contracts/registry). */
   contractId: string;
@@ -36,16 +39,147 @@ export type OnChainAbiRegistryClientConfig = {
   maxCacheSize?: number;
   /** Time-to-live for cached entries in milliseconds. Defaults to 5 minutes. */
   cacheTtlMs?: number;
+  /**
+   * Locally-held spec blobs, keyed by their canonical sha256 - the same hash
+   * the registry stores on chain.
+   *
+   * Content addressing is what makes this safe rather than merely fast: a hit
+   * means the bytes in hand are provably the bytes the chain names, so fetching
+   * the pointer to confirm what the hash already proves is a round trip for
+   * nothing. A miss falls through to the pointer exactly as before.
+   *
+   * This matters most where it is least convenient. Resolving a spec otherwise
+   * needs the RPC *and* whatever host serves the pointer to both be reachable,
+   * which is two chances to fail per spec on a slow network. A caller that
+   * ships the well-known specs already holds every byte it would download.
+   */
+  offlineBlobs?: ReadonlyMap<string, string>;
+  /**
+   * Extra attempts after a *transport* failure - a request that never reached
+   * the RPC. Defaults to 2, so three attempts in total, with 150ms then 300ms
+   * of backoff.
+   *
+   * Deterministic failures are never retried; see {@link withTransportRetry}.
+   * Set to 0 to fail on the first dropped connection.
+   */
+  transportRetries?: number;
 };
 
-type SpecRecord = {
+/**
+ * Thrown when the registry holds an entry for this key but the network has
+ * archived it, so it can only be read again after someone pays a
+ * `RestoreFootprint`.
+ *
+ * This is deliberately distinct from a `null` return, which means "never
+ * published". The two are indistinguishable at the RPC layer unless you look
+ * for the restore preamble: an archived persistent entry makes the host
+ * refuse the invocation and the RPC answers with `restorePreamble` (the
+ * footprint and minimum fee a restore would cost) rather than a result, while
+ * a key that was never written simulates fine and returns void.
+ */
+export class RegistryEntryArchivedError extends Error {
+  readonly contractId: string;
+  readonly publisher: string;
+  readonly registryContractId: string;
+  /** Contract function whose simulation hit the archived entry. */
+  readonly fn: string;
+  /** Minimum fee, in stroops, the RPC quoted for the restore. Absent when the archival was reported as a plain simulation error. */
+  readonly minResourceFee?: string;
+  /** Base64 `SorobanTransactionData` for the restore transaction, when the RPC supplied a preamble. */
+  readonly restoreTransactionData?: string;
+
+  constructor(args: {
+    contractId: string;
+    publisher: string;
+    registryContractId: string;
+    fn: string;
+    minResourceFee?: string;
+    restoreTransactionData?: string;
+    detail?: string;
+  }) {
+    super(
+      `OnChainAbiRegistryClient: registry entry for ${args.contractId} (publisher ${args.publisher}) has been archived and must be restored before "${args.fn}" can read it` +
+        (args.minResourceFee ? ` - restore costs at least ${args.minResourceFee} stroops` : "") +
+        (args.detail ? `: ${args.detail}` : ""),
+    );
+    this.name = "RegistryEntryArchivedError";
+    this.contractId = args.contractId;
+    this.publisher = args.publisher;
+    this.registryContractId = args.registryContractId;
+    this.fn = args.fn;
+    this.minResourceFee = args.minResourceFee;
+    this.restoreTransactionData = args.restoreTransactionData;
+  }
+}
+
+/**
+ * Archived persistent entries surface either as a `restorePreamble` on an
+ * otherwise-successful simulation or, depending on RPC version, as a
+ * simulation error naming the archived/expired entry. Both are matched so the
+ * distinction survives an RPC upgrade.
+ */
+const ARCHIVED_ENTRY_ERROR = /archiv|expired|EntryArchived|restore/i;
+
+/**
+ * Metadata record for a published contract spec as stored on-chain in the registry.
+ */
+export type SpecRecord = {
+  /** Semver version of the published spec */
   version: string;
+  /** Hex-encoded SHA-256 hash of the spec content */
   specHash: string; // hex
+  /** Off-chain URI pointer where the spec blob is hosted */
   pointer: string;
+  /** Address of the publisher account that registered the spec */
   publisher: string;
+  /** ISO timestamp when the spec was published */
   publishedAt: string;
+  /** Ledger sequence number in which the publish transaction was included */
   publishedAtLedger: number;
 };
+
+/**
+ * One contract's most recently observed publication, as returned by
+ * {@link OnChainAbiRegistryClient.listRegisteredContracts}.
+ */
+export type RegisteredContractSummary = {
+  /** The contract whose spec was published. */
+  contractId: string;
+  /** Address of the publisher that registered the spec. */
+  publisher: string;
+  /**
+   * The version published at the highest ledger within the scanned window.
+   * A more recent publish outside the window is not seen.
+   */
+  latestVersion: string;
+  /** Hex-encoded SHA-256 hash of the spec content. */
+  specHash: string;
+  /** Off-chain URI pointer where the spec blob is hosted. */
+  pointer: string;
+  /** Ledger sequence number of the `SpecPublished` event. */
+  publishedAtLedger: number;
+};
+
+/** Options for {@link OnChainAbiRegistryClient.listRegisteredContracts}. */
+export type ListRegisteredContractsOptions = {
+  /**
+   * How many ledgers of registry history to scan, counting back from the
+   * latest ledger. Soroban RPC only keeps a bounded window of events, so this
+   * is a bounded scan, not a full index. Defaults to
+   * {@link DEFAULT_LOOKBACK_LEDGERS}.
+   */
+  lookbackLedgers?: number;
+  /** Only return specs from this publisher. Defaults to `config.publisher`. */
+  publisher?: string;
+  /** Maximum events fetched per `getEvents` page. Defaults to 100. */
+  pageLimit?: number;
+};
+
+/** About 24 hours of ledgers at Stellar's ~5s close time. */
+export const DEFAULT_LOOKBACK_LEDGERS = 17_280;
+
+/** `topic[0]` of the registry's `SpecPublished` event (soroban-sdk snake_cases the struct name). */
+const SPEC_PUBLISHED_TOPIC = "spec_published";
 
 /**
  * Resolves {@link ContractSpec}s by reading the on-chain Orbital ABI registry
@@ -85,6 +219,11 @@ export class OnChainAbiRegistryClient {
     return this.resolveRecord(contractId, records[records.length - 1]!);
   }
 
+  clearCache(): void {
+    this.recordsCache.clear();
+    this.specCache.clear();
+  }
+
   /**
    * Resolves whichever spec version was current as of `ledger` - the most
    * recently published version whose `published_at_ledger` is `<= ledger`.
@@ -105,7 +244,92 @@ export class OnChainAbiRegistryClient {
     return this.resolveRecord(contractId, candidate);
   }
 
-  private async getRecords(contractId: string): Promise<SpecRecord[]> {
+  /**
+   * Resolves one specific published version of `contractId`'s spec, or
+   * `null` if that exact version was never published under
+   * {@link OnChainAbiRegistryClientConfig.publisher}.
+   */
+  async getSpecByVersion(contractId: string, version: string): Promise<ContractSpec | null> {
+    const record = await this.simulateGetVersion(contractId, version);
+    if (!record) return null;
+    return this.resolveRecord(contractId, record);
+  }
+
+  /**
+   * Every published version's on-chain record for `contractId` - version,
+   * spec hash, off-chain pointer, publisher, and publish ledger - ordered
+   * oldest to newest. Unlike `getSpec*`, this does not fetch or verify the
+   * pointed-at blob; it is the registry explorer's version-history and
+   * publisher/spec-hash source (issue #913), which needs the on-chain
+   * record metadata for every version, not just one resolved spec body.
+   */
+  async getRecords(contractId: string): Promise<ReadonlyArray<SpecRecord>> {
+    return this.getRecordsInternal(contractId);
+  }
+
+  /**
+   * Lists the contracts that have published a spec to this registry, by
+   * scanning the registry contract's own `SpecPublished` events through
+   * `getEvents` and keeping the highest-ledger publication per contract.
+   *
+   * The registry keys every record by `(contract_id, publisher, version)` and
+   * has no on-chain index of all contracts, so events are the only way to
+   * enumerate it. This is a bounded scan: it sees back as far as
+   * `options.lookbackLedgers` or the RPC's event retention, whichever is
+   * shorter. An empty result means nothing was published in that window, not
+   * that nothing was ever published.
+   *
+   * Results are sorted by `contractId`.
+   */
+  async listRegisteredContracts(
+    options: ListRegisteredContractsOptions = {},
+  ): Promise<RegisteredContractSummary[]> {
+    const server = new SorobanRpc.Server(this.config.rpcUrl);
+    const publisherFilter = options.publisher ?? this.config.publisher;
+    const pageLimit = options.pageLimit ?? 100;
+    const lookback = options.lookbackLedgers ?? DEFAULT_LOOKBACK_LEDGERS;
+
+    const { sequence: latestLedger } = await this.withTransportRetry(
+      () => server.getLatestLedger(),
+      "getLatestLedger",
+    );
+    const startLedger = Math.max(1, latestLedger - lookback);
+    const filters: SorobanRpc.Api.EventFilter[] = [
+      { type: "contract", contractIds: [this.config.contractId] },
+    ];
+
+    const byContract = new Map<string, RegisteredContractSummary>();
+    let cursor: string | undefined;
+
+    for (;;) {
+      const request: SorobanRpc.Server.GetEventsRequest = cursor
+        ? { cursor, filters, limit: pageLimit }
+        : { startLedger, filters, limit: pageLimit };
+      const page = await this.withTransportRetry(
+        () => server.getEvents(request),
+        `getEvents(${this.config.contractId})`,
+      );
+
+      for (const event of page.events) {
+        const summary = parseSpecPublishedEvent(event, publisherFilter);
+        if (!summary) continue;
+        const existing = byContract.get(summary.contractId);
+        if (!existing || summary.publishedAtLedger > existing.publishedAtLedger) {
+          byContract.set(summary.contractId, summary);
+        }
+      }
+
+      if (page.events.length < pageLimit) break;
+      // An event's `id` doubles as its paging cursor when the RPC omits a page cursor.
+      const next = page.cursor || page.events[page.events.length - 1]?.id;
+      if (!next || next === cursor) break;
+      cursor = next;
+    }
+
+    return [...byContract.values()].sort((a, b) => a.contractId.localeCompare(b.contractId));
+  }
+
+  private async getRecordsInternal(contractId: string): Promise<SpecRecord[]> {
     const cached = this.recordsCache.get(contractId);
     if (cached !== undefined) return cached;
 
@@ -126,21 +350,50 @@ export class OnChainAbiRegistryClient {
     const cached = this.specCache.get(cacheKey);
     if (cached !== undefined) return cached;
 
-    const response = await this.transport(record.pointer);
-    if (!response.ok) {
+    // A blob whose canonical hash already matches the on-chain record needs no
+    // fetch: that hash is the entire thing fetching the pointer would establish.
+    const local = this.config.offlineBlobs?.get(record.specHash);
+    let text: string;
+    if (local !== undefined) {
+      text = local;
+    } else {
+      const response = await this.transport(record.pointer);
+      if (!response.ok) {
+        throw new Error(
+          `OnChainAbiRegistryClient: failed to fetch spec blob at ${record.pointer} (${response.status})`,
+        );
+      }
+      text = await response.text();
+    }
+
+    let parsed: ContractSpec;
+    try {
+      parsed = JSON.parse(text) as ContractSpec;
+    } catch {
       throw new Error(
-        `OnChainAbiRegistryClient: failed to fetch spec blob at ${record.pointer} (${response.status})`,
+        `OnChainAbiRegistryClient: spec blob at ${record.pointer} is not valid JSON.`,
       );
     }
-    const text = await response.text();
-    const actualHash = createHash("sha256").update(text).digest("hex");
+
+    // Hash the CANONICAL form, not the bytes as served. `canonicalizeSpec`'s
+    // contract is explicit that it "is what OnChainRegistryPublisher hashes
+    // before publishing, and what any resolver must re-hash to verify a
+    // fetched spec blob against the on-chain spec_hash".
+    //
+    // Hashing the raw response instead made every on-chain resolution fail:
+    // the publisher hashes sorted-key compact JSON while the blob is served
+    // pretty-printed, so the two never agreed and `getSpec` threw for every
+    // seeded contract. It also made the hash hostage to formatting - a
+    // re-serialising CDN, a trailing newline or a reformatted commit would
+    // each have broken a spec that had not changed.
+    const actualHash = createHash("sha256").update(canonicalizeSpec(parsed)).digest("hex");
     if (actualHash !== record.specHash) {
       throw new Error(
         `OnChainAbiRegistryClient: spec_hash mismatch for ${contractId}@${record.version} - expected ${record.specHash}, got ${actualHash}. The fetched blob does not match the on-chain hash and was not returned.`,
       );
     }
 
-    const spec = JSON.parse(text) as ContractSpec;
+    const spec = parsed;
     const validation = validateSpec(spec);
     if (!validation.valid) {
       throw new Error(
@@ -154,24 +407,58 @@ export class OnChainAbiRegistryClient {
     return spec;
   }
 
+  /**
+   * Pages through all published versions transparently by calling the
+   * contract's `list_versions_paged` in a loop. Handles the truncation
+   * marker from the deprecated `list_versions` path gracefully.
+   */
   private async simulateListVersions(targetContractId: string): Promise<string[]> {
-    const retval = await this.simulate("list_versions", [
-      nativeToScVal(targetContractId, { type: "address" }),
-      nativeToScVal(this.config.publisher, { type: "address" }),
-    ]);
-    if (!retval) return [];
-    return (scValToNative(retval) as unknown[]).map((v) => String(v));
+    const allVersions: string[] = [];
+    let cursor: number | null = 0;
+
+    while (cursor !== null) {
+      const retval = await this.simulate(
+        "list_versions_paged",
+        [
+          nativeToScVal(targetContractId, { type: "address" }),
+          nativeToScVal(this.config.publisher, { type: "address" }),
+          nativeToScVal(cursor, { type: "u32" }),
+          nativeToScVal(25, { type: "u32" }), // MAX_PAGE_SIZE
+        ],
+        targetContractId,
+      );
+
+      if (!retval) break;
+
+      const native = scValToNative(retval) as [string[], number | null];
+      const [page, nextCursor] = native;
+
+      for (const version of page) {
+        // Skip truncation sentinel markers from the deprecated list_versions
+        if (!version.startsWith("__truncated_")) {
+          allVersions.push(version);
+        }
+      }
+
+      cursor = nextCursor;
+    }
+
+    return allVersions;
   }
 
   private async simulateGetVersion(
     targetContractId: string,
     version: string,
   ): Promise<SpecRecord | null> {
-    const retval = await this.simulate("get_version", [
-      nativeToScVal(targetContractId, { type: "address" }),
-      nativeToScVal(this.config.publisher, { type: "address" }),
-      nativeToScVal(version, { type: "string" }),
-    ]);
+    const retval = await this.simulate(
+      "get_version",
+      [
+        nativeToScVal(targetContractId, { type: "address" }),
+        nativeToScVal(this.config.publisher, { type: "address" }),
+        nativeToScVal(version, { type: "string" }),
+      ],
+      targetContractId,
+    );
     if (!retval) return null;
     const native = scValToNative(retval) as Record<string, unknown> | null;
     if (!native) return null;
@@ -185,7 +472,51 @@ export class OnChainAbiRegistryClient {
     };
   }
 
-  private async simulate(fn: string, args: xdr.ScVal[]): Promise<xdr.ScVal | null> {
+  /**
+   * Retries a call that failed to reach the RPC at all.
+   *
+   * Public Soroban RPC endpoints drop connections. Measured against
+   * soroban-testnet.stellar.org: roughly one cold read in eight fails with a
+   * bare `fetch failed` and no cause - not a slow response, a dropped one. A
+   * page reading five contracts then has about even odds of at least one
+   * failing, which is why the registry explorer reported an empty registry
+   * against a registry that held four specs.
+   *
+   * Only *transport* failures are retried. A simulation error, an archived
+   * entry, or a contract error is deterministic: the same call will fail the
+   * same way, so retrying it just multiplies the wait before reporting what
+   * was already known. Those propagate on the first attempt.
+   */
+  private async withTransportRetry<T>(call: () => Promise<T>, label: string): Promise<T> {
+    const attempts = Math.max(1, (this.config.transportRetries ?? 2) + 1);
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await call();
+      } catch (err) {
+        lastError = err;
+        // A thrown Error with no `cause` and a transport-shaped message is
+        // undici failing to complete the request. Anything the RPC actually
+        // answered comes back as a value, not a throw.
+        if (attempt === attempts) break;
+        await new Promise((r) => setTimeout(r, 150 * 2 ** (attempt - 1)));
+      }
+    }
+
+    throw new Error(
+      `OnChainAbiRegistryClient: RPC unreachable for ${label} after ${attempts} attempts: ${
+        lastError instanceof Error ? lastError.message : String(lastError)
+      }`,
+      { cause: lastError },
+    );
+  }
+
+  private async simulate(
+    fn: string,
+    args: xdr.ScVal[],
+    targetContractId: string,
+  ): Promise<xdr.ScVal | null> {
     const server = new SorobanRpc.Server(this.config.rpcUrl);
     // Throwaway, unfunded source - see the class doc comment above.
     const source = new Account(Keypair.random().publicKey(), "0");
@@ -199,11 +530,91 @@ export class OnChainAbiRegistryClient {
       .setTimeout(30)
       .build();
 
-    const sim = await server.simulateTransaction(tx);
+    const sim = await this.withTransportRetry(
+      () => server.simulateTransaction(tx),
+      `${fn}(${targetContractId})`,
+    );
+
     if (SorobanRpc.Api.isSimulationError(sim)) {
+      if (ARCHIVED_ENTRY_ERROR.test(sim.error)) {
+        throw this.archived(fn, targetContractId, { detail: sim.error });
+      }
       throw new Error(`OnChainAbiRegistryClient: simulation of "${fn}" failed: ${sim.error}`);
     }
+
+    // A restore preamble means the entry exists but has been archived: the
+    // registry did publish it, and reading it again costs a RestoreFootprint.
+    // Reporting this as a plain miss would tell callers the spec was never
+    // published, which is a different (and unfixable) problem.
+    const preamble = (
+      sim as { restorePreamble?: { minResourceFee: string; transactionData?: unknown } }
+    ).restorePreamble;
+    if (preamble?.minResourceFee) {
+      throw this.archived(fn, targetContractId, {
+        minResourceFee: preamble.minResourceFee,
+        restoreTransactionData: this.encodeRestoreData(preamble.transactionData),
+      });
+    }
+
     if (!("result" in sim) || !sim.result) return null;
     return sim.result.retval;
+  }
+
+  private archived(
+    fn: string,
+    targetContractId: string,
+    extra: { minResourceFee?: string; restoreTransactionData?: string; detail?: string },
+  ): RegistryEntryArchivedError {
+    return new RegistryEntryArchivedError({
+      contractId: targetContractId,
+      publisher: this.config.publisher,
+      registryContractId: this.config.contractId,
+      fn,
+      ...extra,
+    });
+  }
+
+  /** The preamble's transactionData is an XDR object on modern SDKs and already a base64 string on older ones. */
+  private encodeRestoreData(data: unknown): string | undefined {
+    if (typeof data === "string") return data;
+    const encodable = data as { toXDR?: (format: "base64") => string } | undefined;
+    return typeof encodable?.toXDR === "function" ? encodable.toXDR("base64") : undefined;
+  }
+}
+
+/**
+ * Decodes one `getEvents` record as a registry `SpecPublished` event, or
+ * returns `null` when it is a different event (`worker_registered`,
+ * `operator_registered`), comes from another publisher, or fails to decode.
+ *
+ * `#[contractevent]` puts the snake_case event name in `topic[0]`, then the
+ * `#[topic]` fields in order: `contract_id`, `version`. The other fields
+ * (`spec_hash`, `pointer`, `publisher`) are in `value`.
+ */
+function parseSpecPublishedEvent(
+  event: { topic: xdr.ScVal[]; value: xdr.ScVal; ledger: number },
+  publisherFilter: string,
+): RegisteredContractSummary | null {
+  try {
+    if (event.topic.length < 3) return null;
+    if (scValToNative(event.topic[0]!) !== SPEC_PUBLISHED_TOPIC) return null;
+
+    const data = scValToNative(event.value) as Record<string, unknown>;
+    const publisher = String(data["publisher"]);
+    if (publisher !== publisherFilter) return null;
+
+    const specHash = data["spec_hash"];
+    if (!(specHash instanceof Uint8Array)) return null;
+
+    return {
+      contractId: String(scValToNative(event.topic[1]!)),
+      publisher,
+      latestVersion: String(scValToNative(event.topic[2]!)),
+      specHash: Buffer.from(specHash).toString("hex"),
+      pointer: String(data["pointer"]),
+      publishedAtLedger: event.ledger,
+    };
+  } catch {
+    return null;
   }
 }

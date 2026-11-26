@@ -6,6 +6,7 @@ function toNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/** Error raised when a Horizon SSE stream fails unexpectedly. */
 export class HorizonStreamError extends Error {
   readonly status?: number;
   readonly statusCode?: number;
@@ -48,10 +49,21 @@ export class HorizonStreamError extends Error {
   }
 }
 
+/** Error raised when a caller starts an engine that is already running. */
 export class EngineAlreadyStartedError extends Error {
   constructor() {
     super("[pulse-core] EventEngine.start() called while the SSE stream is already active.");
     this.name = "EngineAlreadyStartedError";
+  }
+}
+
+/** Error raised when the configured ingestion mode is unsupported. */
+export class InvalidIngestionModeError extends Error {
+  constructor(value: unknown) {
+    super(
+      `[pulse-core] CoreConfig.ingestion: invalid value ${JSON.stringify(value)}. Must be "unified", "horizon", or "auto".`,
+    );
+    this.name = "InvalidIngestionModeError";
   }
 }
 
@@ -64,9 +76,29 @@ export class NetworkMismatchError extends Error {
   }
 }
 
+/**
+ * Why a Soroban RPC request failed, as {@link SorobanRpcError.code}. Branch on
+ * it instead of parsing the message. `SorobanRpcClient` assigns:
+ *
+ * - `"network"`: the request failed before any response arrived.
+ * - `"rate_limit"`: HTTP 429.
+ * - `"auth"`: HTTP 401 or 403.
+ * - `"server"`: HTTP 5xx, a JSON-RPC server error (-32000 to -32099), or a
+ *   transaction that `pollTransaction` did not see land in time.
+ * - `"invalid_request"`: any other HTTP 4xx or JSON-RPC error, or a response
+ *   that is not valid JSON or lacks the expected result.
+ * - `"unknown"`: any other unsuccessful HTTP status.
+ */
 export type SorobanRpcErrorCode =
   "network" | "rate_limit" | "auth" | "invalid_request" | "server" | "unknown";
 
+/**
+ * What a {@link SorobanRpcError} is built with besides its message: its `code`,
+ * whether a retry can help, and optionally the HTTP status, the server's retry
+ * delay and the underlying cause. Pass it when you throw one from your own
+ * `SorobanRpc` implementation, since `SorobanSubscriber` retries only errors
+ * marked `retryable`.
+ */
 export type SorobanRpcErrorOptions = {
   code: SorobanRpcErrorCode;
   retryable: boolean;
@@ -75,6 +107,7 @@ export type SorobanRpcErrorOptions = {
   cause?: unknown;
 };
 
+/** Failure returned or wrapped from a Soroban RPC request. */
 export class SorobanRpcError extends Error {
   readonly code: SorobanRpcErrorCode;
   readonly retryable: boolean;
@@ -97,6 +130,12 @@ export class SorobanRpcError extends Error {
   }
 }
 
+/**
+ * Returns true when the value is a Soroban RPC error instance.
+ *
+ * @param error - Any caught value.
+ * @returns `true` if `error` is a {@link SorobanRpcError}.
+ */
 export function isSorobanRpcError(error: unknown): error is SorobanRpcError {
   return error instanceof SorobanRpcError;
 }

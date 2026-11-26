@@ -7,11 +7,15 @@ strict [semver](https://semver.org/spec/v2.0.0.html). Breaking changes ship
 only in majors. Deprecated surfaces get at least a 6-month window before
 removal. Every breaking change has a documented migration path.
 
+The `0.1.0` → `1.0.0` migration path (before/after edits, source-compatible
+“nothing to do” list, registry configuration) is
+[`docs/migration/0.1-to-1.0.md`](./docs/migration/0.1-to-1.0.md).
+
 ---
 
 ## What is covered
 
-The public API surface of all four packages:
+The public API surface of all five packages:
 
 - **`@orbital-stellar/pulse-core`** - `EventEngine`, `Watcher`, the
   `NormalizedEvent` discriminated union and all per-event shapes,
@@ -23,6 +27,10 @@ The public API surface of all four packages:
 - **`@orbital-stellar/pulse-notify`** - all exported hooks.
 - **`@orbital-stellar/abi-registry`** - client interfaces, the `decodedData`
   shape, the schema format, `RegistryPublisher`.
+- **`@orbital-stellar/worker-core`** - `WorkerNotifier`, `WorkerEvent`
+  discriminated union (`worker.fired`, `worker.missed`), worker event shapes,
+  `WorkerVerdictRecord`'s JSON shape (schema version 1 - see
+  `WorkerFireVerdictStore` and issue #1050).
 
 **Wire and data contracts are API.** This pledge is not limited to
 TypeScript signatures. The following are all covered, and a change to any of
@@ -34,6 +42,10 @@ TypeScript:
 - The HMAC signing scheme
 - Retry semantics
 - The `NormalizedEvent` JSON shape on the wire
+- The `worker.fired` and `worker.missed` JSON shapes on the wire (see `@orbital-stellar/worker-core`)
+- The `WorkerVerdictRecord` JSON shape (`WorkerFireVerdictStore`, issue
+  #1050) - what an operator disputes, a subscriber audits, and a backstop
+  claim is assessed against
 - The cursor format (see [`docs/cursor-format.md`](./docs/cursor-format.md))
 - The registry schema format
 
@@ -53,7 +65,7 @@ TypeScript:
 |---|---|
 | **Patch** | Bug fixes, security fixes, docs, non-observable internal changes |
 | **Minor** | New exports, new optional fields/params, new event types added to unions, deprecations with warnings |
-| **Major** | Removal of surfaces deprecated ≥6 months prior, behavioral changes, dependency floor bumps - every break documented in the migration guide |
+| **Major** | Removal of surfaces deprecated ≥6 months prior, behavioral changes, dependency floor bumps - every break documented in the [migration guide](./docs/migration/0.1-to-1.0.md) |
 
 > **Footnote.** New `NormalizedEvent` variants may be added in minors.
 > Consumers using `switch (event.type)` should keep a `default` branch that

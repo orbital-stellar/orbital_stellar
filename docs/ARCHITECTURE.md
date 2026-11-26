@@ -47,6 +47,7 @@ flowchart LR
   subgraph Stellar["Stellar network"]
     Horizon["Horizon REST + SSE"]
     RPC["Stellar RPC<br/>Soroban events"]
+    Unified["Stellar RPC getEvents<br/>CAP-67 unified stream<br/>✅ opt-in"]
   end
 
   subgraph Subscribe["Subscription plane<br/>@orbital-stellar/pulse-core"]
@@ -67,6 +68,7 @@ flowchart LR
 
   Horizon --> Engine
   RPC --> Engine
+  Unified -.->|"see §4.1"| Engine
   Engine --> Cursor
   Engine --> Normalize --> Watcher
   Watcher --> Sign --> YourEndpoint["Your HTTPS endpoint"]
@@ -112,6 +114,25 @@ together inside a single Next.js route handler - about 50 lines of glue.
 - It is the MIT package surface. The hosted registry service described in `docs/open-source-policy.md` is a separate product boundary.
 
 The package-level reference lives in [`packages/abi-registry/README.md`](../packages/abi-registry/README.md).
+
+Above decode sits the **semantic layer** — taxonomy mappings (e.g.
+`transfer` → `token.transferred`, `swap` → `swap.executed`) and entity
+labels (contract → protocol / issuer). Unmapped events stay unmapped; the
+layer never guesses a name. Full explanation and a live mainnet worked
+example: [`docs/semantic-layer.md`](./semantic-layer.md).
+
+**Wiring (issue #909).** `EventEngine` populates `ContractEmittedEvent.semantic`
+from `CoreConfig.taxonomy` - a `TaxonomyResolver` built from `SEP41_TAXONOMY`
+by default, a caller-supplied entry array, or `false` to opt out. It resolves
+straight from `(contractId, topics)`, independent of `decodedData`/`abiRegistry`,
+so it works even for a contract with no published ABI spec. `contract`- and
+`wasmHash`-scoped entries resolve today; `interface`-scoped entries - which
+is what the bundled `SEP41_TAXONOMY` is - do not yet, because nothing in
+this pipeline determines which SEP interfaces a contract implements
+(`ContractSpec` has no such field). Populating that is the next step, not
+implemented here: either a schema addition to `ContractSpec` (a wire-format
+change, reviewed like `STABILITY.md` treats other schema surfaces) or
+structural detection from a contract's function signatures.
 
 ---
 
@@ -207,6 +228,105 @@ The full taxonomy is documented in
 and the per-event TypeScript shapes live in
 [`packages/pulse-core/src/index.ts`](../packages/pulse-core/src/index.ts).
 
+### Transaction identity on classic events
+
+Every classic normalized event carries three optional identity fields -
+`txHash`, `ledger`, and `memo` - matching the `txHash`/`ledger` the Soroban
+half of the taxonomy already had. Without them a consumer switching on
+`event.type` gets a different guarantee depending on which transport the event
+arrived over, and cannot dedupe, audit, or correlate a payment to an invoice
+without a second Horizon round-trip.
+
+`transaction_hash` is on every Horizon operation record. `ledger` and `memo`
+live on the *transaction*, so the engine opens its operations stream with
+`join("transactions")`, which makes Horizon embed the full transaction in each
+operation record rather than costing a second request.
+
+Two consequences worth knowing:
+
+- **Response size.** The joined transaction roughly triples the payload: a
+  3-record `/operations` page measured 6,455 bytes without the join and 19,148
+  bytes with it (testnet, 2026-08-31). The cost is bandwidth on a stream that
+  is already open, not extra requests.
+- **Cursor semantics are unaffected.** `paging_token` is identical with and
+  without `join=transactions`, so cursors written by an older version stay
+  valid across the change.
+
+All three fields are optional. A transport that cannot supply them still emits
+a valid event, and `STABILITY.md`'s semver pledge binds from `1.0.0` - adding
+optional fields stays additive, adding required ones later would not.
+
+---
+
+## 4.1 Unified event ingestion (CAP-67) ✅
+
+Protocol 23's CAP-67 lets classic asset movements (transfer, mint, burn,
+clawback, `set_authorized`) emit Soroban-format events in a single stream,
+fetched the same way contract events already are - `SorobanRpcClient.getEvents()`.
+This is a third transport alongside Horizon SSE and the Soroban contract-event
+subscriber, tracked as Wave 1.6 in [`ROADMAP.md`](../ROADMAP.md) and designed
+in [`docs/design/cap67-mapping.md`](./design/cap67-mapping.md) (see also
+[`docs/CAP-67-Event-Mapping.md`](./CAP-67-Event-Mapping.md) for the taxonomy
+rationale). It shipped in `0.2.0` and is wired into `EventEngine`'s live
+delivery path: when the effective mode is `"unified"`, a family with a unified
+equivalent stops arriving via Horizon and arrives via the unified stream
+instead. The unified poller is started only when `soroban.unifiedEvents` is
+set, and keeps its own cursor.
+
+**Ingestion mode.** `CoreConfig.ingestion?: "unified" | "horizon" | "auto"`
+(default `"horizon"`) selects a transport preference. `"horizon"` is the
+default specifically so that existing consumers see zero behavior change
+until they opt in. `"auto"` is meant to prefer `"unified"` once the
+configured Soroban RPC is confirmed CAP-67-capable, falling back to
+`"horizon"` otherwise. The flag is validated at construction (an unknown
+value throws) and reported back via `engine.status().ingestion`.
+
+**Routing decision.** Not every event family has a CAP-67 equivalent - per
+the mapping design doc, only classic payments (transfer/mint/burn) and
+trustline authorization (`set_authorized`) do. Everything else (account
+options, account creation, account merges, trustline limit changes, offers,
+bump-sequence, `manage_data`, claimable balances, liquidity pools) has no
+unified-stream equivalent and stays Horizon-only under every mode.
+`resolveFamilyTransport(family, effectiveMode)` is the pure function
+encoding this:
+
+| Event family | Under `"horizon"` mode | Under `"unified"` mode |
+|---|---|---|
+| `payment` (transfer/mint/burn) | Horizon | Unified |
+| `trustlineAuth` (`set_authorized`) | Horizon | Unified |
+| `trustlineLimit`, `accountCreated`, `accountOptions`, `accountMerge`, `offer`, `bumpSequence`, `manageData`, `claimableBalance`, `liquidityPool` | Horizon | Horizon |
+
+`"auto"` resolves to one of the two columns above (never a third behavior).
+On start the engine reads the RPC's `getNetwork` protocol version and
+resolves `"auto"` to `"unified"` only when a unified transport is configured
+and the protocol is CAP-67-capable (`rpcSupportsUnifiedEvents`); otherwise it
+resolves to `"horizon"`. The resolved transport is reported as
+`engine.status().effectiveIngestion`.
+
+**Dedupe window.** During a routing transition - a mode switch, or `"auto"`
+falling back and recovering - both transports can briefly observe the same
+on-chain movement, which would otherwise reach a `Watcher` twice.
+`deriveDedupeKey({ txHash, index })` derives one key per movement regardless
+of which transport observed it (a Horizon operation and a CAP-67 event both
+carry a transaction hash; `index` is the operation's position in the tx, or
+the unified event's ordinal). `DedupeWindow` holds a bounded set of
+recently-seen keys ahead of `Watcher` fan-out - `seenBefore(key)` returns
+`true` for a duplicate, and the oldest key is evicted once the window is at
+capacity, so memory never grows unbounded no matter how long the engine runs.
+
+```mermaid
+flowchart LR
+  HorizonOp["Horizon operation"] --> Route
+  UnifiedEvt["CAP-67 unified event"] --> Route
+  Route{"resolveFamilyTransport<br/>(family, mode)"} --> Normalize["normalize()"]
+  Normalize --> Dedupe{"DedupeWindow<br/>.seenBefore(txHash:index)"}
+  Dedupe -->|first time| Watcher["Watcher fan-out"]
+  Dedupe -->|duplicate| Drop(["dropped"])
+```
+
+A COOKBOOK recipe for migrating an existing Horizon-only deployment onto
+unified ingestion is planned but not yet written.
+
 ---
 
 ## 5. Reconnection, backoff, and rate limits
@@ -254,6 +374,38 @@ For `engine.cursor_expired` notifications, the payload includes:
 Consumers can subscribe to these via `watcher.on("engine.reconnecting", …)`
 to surface UI banners or write structured logs.
 
+### In-process backpressure and bounded queues
+
+To protect consumers from unbounded memory growth when a watcher is slow or
+there's a burst of ledger activity, `EventEngine` now maintains a bounded
+internal queue. Configuration lives in `CoreConfig.queue` and exposes three
+knobs:
+
+- **`highWaterMark`**: the maximum queued events before backpressure triggers (default: 10000).
+- **`lowWaterMark`**: the level below which backpressure is considered cleared (default: 50% of highWaterMark).
+- **`policy`**: one of `pause` (default), `drop-oldest`, or `drop-newest`.
+
+When the high-water mark is crossed the engine emits `engine.backpressure`
+with `{ active: true, queued, policy }`. The default `pause` policy stops
+the underlying sources (Horizon and Soroban) until the queue drains below the
+low-water mark, at which point `engine.backpressure` with `{ active: false }`
+is emitted and sources are resumed. `drop-oldest` and `drop-newest` shed
+events deterministically instead of pausing the source; these are useful for
+best-effort dashboards where availability is preferred over perfect delivery.
+
+"Pausing the source" is enforced at **ingestion**: a paused source's events are
+discarded in `enqueueEvent` before they reach the queue, not merely filtered
+out later when the queue is routed. This distinction is what makes the `pause`
+policy bounded. `pauseSource()` records the pause in a set; it cannot reach
+into a live Horizon SSE stream and stop it delivering, so records keep
+arriving after a pause. Filtering them at routing time alone would leave every
+one of them occupying queue depth in the meantime, and the default policy —
+which, unlike the two `drop-*` policies, has no shedding step at the mark —
+would grow with the burst rather than stop at it. A 10k-event burst through a
+deliberately slow watcher is exercised in
+`packages/pulse-core/test/EventEngine.backpressure.test.ts`, which asserts
+depth holds at the high-water mark under all three policies.
+
 ---
 
 ## 6. Webhook delivery internals
@@ -275,7 +427,16 @@ to surface UI banners or write structured logs.
    accumulate and exhaust memory. The cap (`maxConcurrentRetries`, default
    100) evicts the *newest* pending retry first when the limit is hit and
    emits a synthetic `webhook.dropped` event so consumers can route it to a
-   dead-letter store.
+   dead-letter store. This is 13.1's bounded-queue guarantee applied to
+   webhooks: without a `retryQueue` configured, the cap is enforced against
+   the in-process `retryTimers` map directly; with one (Memory/Redis/Postgres/SQS),
+   it's enforced against `queue.size()` and sheds via `evictNewest()` in
+   `persistRetry()` - same policy, same drop event, different backing store.
+   A 10k-event burst against a permanently-failing endpoint is exercised in
+   `packages/pulse-webhooks/test/pulse-webhooks.test.ts` ("holds the retry
+   map at maxConcurrentRetries under a 10k-event burst"), which asserts the
+   map's size never exceeds the cap at any point during the burst, not just
+   at the end.
 5. **Terminal failure.** After all retries are exhausted, the delivery
    emits `webhook.failed` on the watcher with `{ error, url, attempts,
    originalEvent }` in `raw`. The watcher's `on("webhook.failed", …)`
@@ -481,9 +642,61 @@ orbital_stellar/
 - [`PROGRESS.md`](../PROGRESS.md) - Status snapshot and completion checklist
 - [`ROADMAP.md`](../ROADMAP.md) - Phase 0 → Phase 4 timeline
 - [`CHANGELOG.md`](../CHANGELOG.md) - Per-release notes
+- [`docs/semantic-layer.md`](./semantic-layer.md) - Semantic taxonomy, labels, precedence, honesty rule
 - [`docs/proposal.md`](./proposal.md) - SCF grant proposal
+- [`docs/design/cap67-mapping.md`](./design/cap67-mapping.md) - CAP-67 → `NormalizedEvent` mapping design doc (§4.1)
+- [`docs/design/workers.md`](./design/workers.md) - Worker layer ADR: the trigger is not the custodian (Phase 4)
+- [`docs/design/prior-art-workers.md`](./design/prior-art-workers.md) - Prior art behind the worker design
+- [`docs/design/worker-verification-verdicts.md`](./design/worker-verification-verdicts.md) - Verdict taxonomy for chain-derived worker verification (19.1, §C.3/§C.6)
+- [`docs/design/worker-offchain-triggers.md`](./design/worker-offchain-triggers.md) - Attestation model for off-chain-computation triggers (20.7, §C.1/§C.8)
+- [`docs/CAP-67-Event-Mapping.md`](./CAP-67-Event-Mapping.md) - CAP-67 event taxonomy rationale (§4.1)
+- [`docs/design/worker-guard-rails.md`](./design/worker-guard-rails.md) - worker price/slippage guard rails, on-chain vs off-chain split (issue 22.5)
 - Per-package READMEs:
   [`pulse-core`](../packages/pulse-core/README.md),
   [`pulse-webhooks`](../packages/pulse-webhooks/README.md),
   [`pulse-notify`](../packages/pulse-notify/README.md),
   [`abi-registry`](../packages/abi-registry/README.md)
+
+
+## Performance benchmarks
+
+The hot path of every event is normalization plus, for Soroban contract events,
+spec resolution and decoding. A change that halves throughput there would ship
+unnoticed without a guard, so `packages/pulse-core/bench/` holds a benchmark
+suite that CI runs on every packages change and gates on regressions.
+
+### What is measured
+
+The suite runs four things against the recorded CAP-67 fixture corpus in
+`packages/pulse-core/test/fixtures/cap67/`, so the numbers reflect pulse-core's
+own work rather than network time:
+
+- **normalize/raw-to-normalized** - a raw RPC event through `normalizeContractEvent`.
+- **decode/cap67-transfer** - the CAP-67 unified `transfer` decoder over the
+  transfer fixtures (bare `i128` and `SCMap`-with-memo forms).
+- **watcher/fan-out-1, -100, -1000** - `Watcher.emit` dispatch at each fan-out width.
+- **cursor/memory-set** and **cursor/memory-set-many-100** - cursor write cost
+  for the in-memory adapter, single-key and batched.
+
+### Running it
+`bench` exits non-zero when any case is more than 20% slower than the committed
+baseline, or when a baselined case has gone missing. Improvements never fail.
+The harness is dependency-free (`node:perf_hooks` only) and reports the median of
+many batched samples, so a single GC pause does not trip the gate.
+
+### The baseline and how to update it
+
+`packages/pulse-core/bench/baseline.json` is the committed reference. It records
+each case's throughput alongside the machine the numbers came from, because a
+throughput figure is meaningless without the hardware behind it.
+
+Updating the baseline is deliberate. When a change legitimately moves the
+numbers - a faster algorithm, or an accepted cost for new behavior - regenerate
+the baseline with `bench:update` and **justify the change in the pull request
+body**: what moved, why, and roughly by how much. A baseline bump without a
+reason in the PR is treated as a red flag in review, because it is the one way a
+real regression can be laundered into the reference.
+
+The current committed baseline was generated on a developer workstation and is
+noisier than a dedicated runner would produce; regenerate it on stable hardware
+when convenient and record that environment here.

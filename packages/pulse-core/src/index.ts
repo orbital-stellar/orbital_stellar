@@ -2,20 +2,25 @@ import type { StellarAmount } from "./amount.js";
 import type { AccountAddress, MuxedAddress, ContractAddress } from "./address.js";
 import type { ClaimPredicate } from "./claimPredicate.js";
 
-export { SorobanRpcClient } from "./SorobanRpcClient.js";
+export { SorobanRpcClient, CAP_67_EVENT_TOPICS } from "./SorobanRpcClient.js";
 export type {
   JsonRpcFailure,
   JsonRpcResponse,
   JsonRpcSuccess,
+  PollTransactionOptions,
+  PollUnifiedEventsOptions,
   SorobanEventFilter,
   SorobanEventXdrFormat,
   SorobanGetEventsParams,
   SorobanGetEventsResult,
+  SorobanGetTransactionResult,
   SorobanLatestLedgerResult,
   SorobanNetworkInfo,
   SorobanRpcCallOptions,
   SorobanRpcClientOptions,
   SorobanRpcEvent,
+  SorobanSendTransactionResult,
+  SorobanSimulateTransactionResult,
 } from "./SorobanRpcClient.js";
 export { EventEngine } from "./EventEngine.js";
 export { SorobanSubscriber } from "./SorobanSubscriber.js";
@@ -27,10 +32,30 @@ export type {
   CursorStore as SorobanCursorStore,
 } from "./SorobanSubscriber.js";
 
-export type { HistoricalSource, HistoricalReplayRange } from "./HistoricalSource.js";
-export { RetentionBoundaryError } from "./HistoricalSource.js";
-export { GalexieHistoricalSource, GalexiePartitionError } from "./GalexieHistoricalSource.js";
-export type { GalexieHistoricalSourceConfig } from "./GalexieHistoricalSource.js";
+// Long-range replay beyond RPC retention (issue #920).
+export {
+  RpcHistoricalSource,
+  OutOfRetentionError,
+  isOutOfRetentionError,
+  parseRetentionBoundary,
+  withHistoricalFallback,
+} from "./HistoricalSource.js";
+export {
+  GalexieHistoricalSource,
+  GalexieSourceError,
+  galexieObjectKey,
+  extractLedgerEvents,
+  formatEventId,
+  parseEventId,
+} from "./GalexieHistoricalSource.js";
+export type {
+  GalexieHistoricalSourceConfig,
+  GalexieExportLayout,
+  GalexieGetEventsResult,
+} from "./GalexieHistoricalSource.js";
+export { scValToXdrJson, escapeSep51, XdrJsonUnsupportedError } from "./xdrJson.js";
+export type { XdrJsonValue, XdrJsonObject } from "./xdrJson.js";
+export type { HistoricalSource } from "./HistoricalSource.js";
 
 export { validateContractFilters } from "./contractFilters.js";
 export { Watcher } from "./Watcher.js";
@@ -46,8 +71,25 @@ export {
   toMuxedAddress,
   toContractAddress,
 } from "./address.js";
-export { EngineAlreadyStartedError, HorizonStreamError } from "./errors.js";
+export {
+  EngineAlreadyStartedError,
+  HorizonStreamError,
+  InvalidIngestionModeError,
+  SorobanRpcError,
+  isSorobanRpcError,
+} from "./errors.js";
+export { fullJitterBackoffMs } from "./backoff.js";
+export type { SorobanRpcErrorCode, SorobanRpcErrorOptions } from "./errors.js";
 export { StrKey } from "@stellar/stellar-sdk";
+/**
+ * SEP-10 Web Authentication helper from `@stellar/stellar-sdk`.
+ *
+ * Re-exported so `@orbital-stellar/anchor-sdk` can build and validate SEP-10
+ * challenge transactions (e.g. `WebAuth.readChallengeTx`) without taking its
+ * own direct dependency on `@stellar/stellar-sdk`. Use it when you need to
+ * verify an anchor's challenge; pulse-core itself does not use it.
+ */
+export { WebAuth } from "@stellar/stellar-sdk";
 export { CursorStore } from "./CursorStore.js";
 export type { CursorStoreLike } from "./CursorStore.js";
 import type { CursorStoreLike } from "./CursorStore.js";
@@ -66,11 +108,21 @@ export type { IRegistryStore } from "./IRegistryStore.js";
 export { InMemoryRegistryStore } from "./IRegistryStore.js";
 export { FileRegistryStore } from "./FileRegistryStore.js";
 
+export {
+  assertRestrictedSecretNetwork,
+  isCiEnvironment,
+  redactSecret,
+  MainnetSecretInRestrictedPathError,
+} from "./secretPolicy.js";
+export type { SecretPolicyContext, AssertRestrictedSecretOptions } from "./secretPolicy.js";
 export { isEventType } from "./eventTypeGuard.js";
+export { deriveDedupeKey, DedupeWindow, InvalidDedupeWindowCapacityError } from "./dedupe.js";
+export type { DedupeEventRef } from "./dedupe.js";
 export * from "./claimPredicate.js";
 export * from "./raw-horizon.js";
 export * from "./raw-soroban.js";
 import type { RawSorobanEvent } from "./raw-soroban.js";
+import type { TaxonomyEntry, TaxonomyResolution } from "@orbital-stellar/abi-registry";
 
 import {
   RawHorizonPayment,
@@ -93,6 +145,7 @@ import {
 /** The Stellar network to connect to. */
 export type Network = "mainnet" | "testnet";
 
+/** Health of one event source: whether it is running, when its last event arrived, and the current reconnect attempt. */
 export type SourceStatus = {
   running: boolean;
   lastEventAt: string | null;
@@ -100,6 +153,7 @@ export type SourceStatus = {
   cursor?: string;
 };
 
+/** Aggregate engine health across every source: run state, watcher counts, per-source status, and the resolved ingestion transport. */
 export type EngineStatus = {
   running: boolean;
   watcherCount: number;
@@ -107,9 +161,21 @@ export type EngineStatus = {
   lastEventAt: string | null;
   reconnectAttempt: number;
   pausedSources?: ("horizon" | "soroban")[];
+  /** The configured value of `CoreConfig.ingestion` (default `"horizon"`). */
+  ingestion: IngestionMode;
+  /**
+   * The `"unified" | "horizon"` transport actually in effect, once resolved
+   * (issue 6.12) - e.g. what `"auto"` decided based on the probed RPC's
+   * CAP-67 support. `"horizon"` until start() resolves it (or forever, for
+   * `"horizon"` mode and for an engine with no unified transport configured
+   * at all - there's nothing to resolve in either case).
+   */
+  effectiveIngestion: "unified" | "horizon";
   sources: {
     horizon: SourceStatus;
     soroban: SourceStatus;
+    /** The CAP-67 unified event poller (see `SorobanConfig.unifiedEvents`). */
+    unified: SourceStatus;
   };
   /**
    * Present only when the engine was constructed with an array of network
@@ -117,7 +183,9 @@ export type EngineStatus = {
    * breakdown of `sources`. `sources` above is an aggregate across all
    * configured networks for consumers that don't need the per-network detail.
    */
-  networks?: Partial<Record<Network, { horizon: SourceStatus; soroban: SourceStatus }>>;
+  networks?: Partial<
+    Record<Network, { horizon: SourceStatus; soroban: SourceStatus; unified: SourceStatus }>
+  >;
 };
 
 /** Passphrase strings for each supported Stellar network. */
@@ -130,11 +198,29 @@ export const NETWORK_PASSPHRASES = {
 export type PaymentEventType = "payment.received" | "payment.sent" | "payment.self";
 /** Event type for account options changes. */
 export type AccountOptionsEventType = "account.options_changed";
+/** Event types for liquidity pool deposits and withdrawals. */
 export type LiquidityPoolEventType = "lp.deposited" | "lp.withdrawn";
+/** Event types for trustline authorization changes. */
 export type TrustAuthEventType = "trustline.authorized" | "trustline.deauthorized";
+/**
+ * Event type for a CAP-67 unified-stream `clawback` event. Has no
+ * Horizon-derived equivalent in this package's current taxonomy, unlike
+ * `mint`/`burn`, which map onto the existing `payment.received`/`payment.sent`
+ * shape.
+ */
+export type AssetClawbackEventType = "asset.clawback";
+/**
+ * Event type for a CAP-67 unified-stream `fee` event. New in CAP-67 - no
+ * Horizon-derived equivalent exists in this package's current taxonomy
+ * (fees were previously only derivable implicitly from transaction
+ * metadata, not modeled as a discrete event).
+ */
+export type FeeIncurredEventType = "fee.incurred";
 /** Event type for account creation. */
 export type AccountEventType = "account.created";
+/** Event type for claimable balance creation. */
 export type ClaimableCreatedEventType = "claimable.created";
+/** Event type for claimable balance claims. */
 export type ClaimableClaimedEventType = "claimable.claimed";
 /** Event types for trustline lifecycle events (added, removed, or limit updated). */
 export type TrustlineEventType = "trustline.added" | "trustline.removed" | "trustline.updated";
@@ -147,10 +233,14 @@ export type WatcherNotificationType =
   | "engine.rate_limited"
   | "engine.stopped"
   | "engine.cursor_store_unhealthy"
-  | "engine.cursor_expired";
+  | "engine.cursor_expired"
+  | "engine.backpressure";
 
+/** Event types for the DEX offer lifecycle: created, updated, or deleted. */
 export type OfferEventType = "offer.created" | "offer.updated" | "offer.deleted";
+/** Event type for account sequence-number bumps. */
 export type BumpSequenceEventType = "account.bump_sequence";
+/** Event types for account data entries: set or cleared. */
 export type DataEventType = "data.set" | "data.cleared";
 
 /**
@@ -187,6 +277,34 @@ export type AccountOptionsChanges = {
 };
 
 /**
+ * Transaction-identity fields carried by every classic (Horizon-sourced)
+ * normalized event, mirroring the `ledger`/`txHash` the Soroban half of the
+ * taxonomy already carries. All three are optional because a transport that
+ * cannot supply them must still produce a valid event - `STABILITY.md`'s
+ * semver pledge binds from `1.0.0`, and optional fields stay additive.
+ *
+ * Populated from the Horizon operation record (`transaction_hash`) and from
+ * the transaction joined onto it via `join=transactions` (`ledger`, `memo`).
+ */
+export type ClassicEventIdentity = {
+  /**
+   * Hash of the transaction this event came from. The stable transaction
+   * identity a consumer needs to deduplicate work already done - pair it with
+   * an operation index and {@link deriveDedupeKey}.
+   */
+  txHash?: string;
+  /** Ledger sequence the transaction was included in, for audit and attestation without a second Horizon round-trip. */
+  ledger?: number;
+  /**
+   * The originating transaction's memo, when the transaction carried one.
+   * Set by the CAP-67 unified transport (from a transfer event's map-based
+   * data form) and, for Horizon-sourced events, from the joined transaction.
+   * Absent when `memo_type` is `"none"`.
+   */
+  memo?: string;
+};
+
+/**
  * A normalized payment event from the Stellar network.
  */
 export type PaymentEvent = {
@@ -206,7 +324,7 @@ export type PaymentEvent = {
   readonly timestampDate: Date;
   /** The original raw record from the Horizon API. */
   raw?: RawHorizonPayment;
-};
+} & ClassicEventIdentity;
 
 /**
  * A normalized account options change event from the Stellar network.
@@ -224,11 +342,15 @@ export type AccountOptionsEvent = {
   readonly timestampDate: Date;
   /** The original raw record from the Horizon API. */
   raw?: RawHorizonSetOptions;
-};
+} & ClassicEventIdentity;
 
 /** Rational (numerator/denominator) form of an offer's price, as returned by Horizon. */
 export type PriceR = { n: number; d: number };
 
+/**
+ * A normalized DEX offer event: an offer created, updated, or deleted,
+ * with both asset legs, the amount, and the price in string and rational form.
+ */
 export type OfferEvent = {
   type: OfferEventType;
   offer_id: string;
@@ -243,8 +365,9 @@ export type OfferEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonManageSellOffer | RawHorizonManageBuyOffer;
-};
+} & ClassicEventIdentity;
 
+/** A normalized sequence-bump event: the account and the new sequence number (`bump_to`). */
 export type BumpSequenceEvent = {
   type: BumpSequenceEventType;
   source: AccountAddress;
@@ -253,13 +376,21 @@ export type BumpSequenceEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonBumpSequence;
-};
+} & ClassicEventIdentity;
 
+/**
+ * One claimant of a claimable balance: the account that may claim it and the
+ * predicate that must hold for the claim to succeed.
+ */
 export type ClaimableBalanceClaimant = {
   destination: AccountAddress;
   predicate: ClaimPredicate;
 };
 
+/**
+ * A normalized claimable-balance creation event: the sponsor, the new
+ * `balanceId`, the claimants with their predicates, and the funded asset.
+ */
 export type ClaimableCreatedEvent = {
   type: ClaimableCreatedEventType;
   sponsor: AccountAddress;
@@ -271,8 +402,9 @@ export type ClaimableCreatedEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonCreateClaimableBalance;
-};
+} & ClassicEventIdentity;
 
+/** A normalized claimable-balance claim event: the claimant sweeping `balanceId`. */
 export type ClaimableClaimedEvent = {
   type: ClaimableClaimedEventType;
   claimant: AccountAddress;
@@ -281,8 +413,12 @@ export type ClaimableClaimedEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonClaimClaimableBalance;
-};
+} & ClassicEventIdentity;
 
+/**
+ * A normalized account-data event: the entry `name` set to `value` (raw
+ * base64 plus decoded bytes), or cleared when `value` is null.
+ */
 export type DataEvent = {
   type: DataEventType;
   source: AccountAddress;
@@ -295,13 +431,21 @@ export type DataEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonManageData;
-};
+} & ClassicEventIdentity;
 
+/**
+ * One side of a liquidity-pool deposit or withdrawal: the asset and the amount
+ * of it deposited or received.
+ */
 export type LiquidityPoolReserve = {
   asset: string;
   amount: StellarAmount;
 };
 
+/**
+ * A normalized liquidity-pool deposit event: the pool, the reserves put in,
+ * and the shares received in return.
+ */
 export type LiquidityPoolDepositEvent = {
   type: "lp.deposited";
   source: AccountAddress;
@@ -312,8 +456,12 @@ export type LiquidityPoolDepositEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonLiquidityPoolDeposit;
-};
+} & ClassicEventIdentity;
 
+/**
+ * A normalized liquidity-pool withdrawal event: the pool, the reserves paid
+ * out, and the shares redeemed for them.
+ */
 export type LiquidityPoolWithdrawEvent = {
   type: "lp.withdrawn";
   source: AccountAddress;
@@ -324,8 +472,14 @@ export type LiquidityPoolWithdrawEvent = {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
   raw?: RawHorizonLiquidityPoolWithdraw;
-};
+} & ClassicEventIdentity;
 
+/**
+ * A normalized trustline authorization event: the `trustor` whose line the
+ * `issuer` authorized or deauthorized for `asset`. `operation` names the
+ * originating operation (`allow_trust`, `set_trust_line_flags`, or CAP-67
+ * `set_authorized`).
+ */
 export type TrustAuthEvent = {
   type: TrustAuthEventType;
   trustor: AccountAddress;
@@ -334,10 +488,10 @@ export type TrustAuthEvent = {
   timestamp: string;
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
-  /** The original Horizon operation type ("allow_trust" or "set_trust_line_flags"). */
+  /** The originating operation type: "allow_trust" or "set_trust_line_flags" from Horizon, or "set_authorized" from the CAP-67 unified stream. */
   operation: string;
   raw?: RawHorizonAllowTrust | RawHorizonSetTrustLineFlags;
-};
+} & ClassicEventIdentity;
 
 /**
  * A normalized account creation event from the Stellar network.
@@ -357,7 +511,7 @@ export type AccountCreatedEvent = {
   readonly timestampDate: Date;
   /** The original raw record from the Horizon API. */
   raw?: RawHorizonCreateAccount;
-};
+} & ClassicEventIdentity;
 
 /**
  * A normalized trustline lifecycle event from the Stellar network.
@@ -377,7 +531,7 @@ export type TrustlineEvent = {
   readonly timestampDate: Date;
   /** The original raw record from the Horizon API. */
   raw?: RawHorizonChangeTrust;
-};
+} & ClassicEventIdentity;
 
 /**
  * A normalized account merge event from the Stellar network.
@@ -395,6 +549,216 @@ export type AccountMergeEvent = {
   readonly timestampDate: Date;
   /** The original raw record from the Horizon API. */
   raw?: RawHorizonAccountMerge;
+} & ClassicEventIdentity;
+
+// ---------------------------------------------------------------------------
+// Anchor Events (SEP-24, SEP-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * The status strings a SEP-24 anchor reports for a deposit or withdrawal
+ * transaction, as defined by SEP-24.
+ *
+ * Carried verbatim in {@link AnchorFlowEvent.protocolStatus} (and the legacy
+ * {@link AnchorTransactionEvent.protocol_status}) so consumers can see exactly
+ * what the anchor said; the normalized lifecycle stage lives in the event
+ * `type` / `stage`.
+ */
+export type Sep24Status =
+  | "incomplete"
+  | "pending_user_transfer_start"
+  | "pending_user_transfer_complete"
+  | "pending_external"
+  | "pending_anchor"
+  | "pending_stellar"
+  | "pending_trust"
+  | "pending_user"
+  | "completed"
+  | "refunded"
+  | "expired"
+  | "no_market"
+  | "too_small"
+  | "too_large"
+  | "error";
+
+/**
+ * The status strings a SEP-31 anchor reports for a cross-border payment
+ * transaction, as defined by SEP-31.
+ *
+ * Carried verbatim in {@link AnchorFlowEvent.protocolStatus} (and the legacy
+ * {@link AnchorTransactionEvent.protocol_status}); the normalized lifecycle
+ * stage lives in the event `type` / `stage`.
+ */
+export type Sep31Status =
+  | "pending_sender"
+  | "pending_stellar"
+  | "pending_transaction_info_update"
+  | "pending_receiver"
+  | "pending_external"
+  | "completed"
+  | "error";
+
+/**
+ * Legacy catch-all anchor transaction event: one SEP-24/SEP-31 transaction
+ * changing status, with the normalized `status` plus the protocol-specific
+ * `protocol_status` and amounts when known.
+ *
+ * @deprecated Use the `anchor.deposit.*` / `anchor.withdrawal.*` /
+ * `anchor.payment.*` family ({@link AnchorFlowEvent}) instead. This single
+ * catch-all event forces consumers to branch on `protocol` and a raw status
+ * string; the flow events carry the lifecycle in the type. Kept so the shape
+ * shipped in #942 still narrows, and scheduled for removal before `v2.0.0`.
+ */
+export type AnchorTransactionEvent = {
+  type: "anchor.transaction_status_changed";
+  protocol: "sep24" | "sep31";
+  transaction_id: string;
+  status: string; // The normalized status, or just the raw status
+  protocol_status: Sep24Status | Sep31Status;
+  message?: string;
+  amount_in?: string;
+  amount_out?: string;
+  timestamp: string;
+  readonly timestampDate: Date;
+  raw?: unknown;
+};
+
+/** The anchor protocol an event came from. */
+export type AnchorProtocol = "sep24" | "sep31";
+
+/**
+ * Lifecycle stage of an anchor flow, shared by deposits, withdrawals and
+ * cross-border payments so a consumer can branch on the stage without caring
+ * which SEP produced it.
+ *
+ * - `initiated` - the anchor has accepted the request and returned an id
+ * - `pending` - waiting on the user, the anchor, an external rail, or Stellar
+ * - `completed` - funds delivered; terminal
+ * - `refunded` - returned to the sender; terminal
+ * - `failed` - errored, expired, or rejected; terminal
+ */
+export type AnchorFlowStage = "initiated" | "pending" | "completed" | "refunded" | "failed";
+
+/** Event types for SEP-24 deposits. */
+export type AnchorDepositEventType =
+  | "anchor.deposit.initiated"
+  | "anchor.deposit.pending"
+  | "anchor.deposit.completed"
+  | "anchor.deposit.refunded"
+  | "anchor.deposit.failed";
+
+/** Event types for SEP-24 withdrawals. */
+export type AnchorWithdrawalEventType =
+  | "anchor.withdrawal.initiated"
+  | "anchor.withdrawal.pending"
+  | "anchor.withdrawal.completed"
+  | "anchor.withdrawal.refunded"
+  | "anchor.withdrawal.failed";
+
+/** Event types for SEP-31 cross-border payments between anchors. */
+export type AnchorPaymentEventType =
+  | "anchor.payment.initiated"
+  | "anchor.payment.pending"
+  | "anchor.payment.completed"
+  | "anchor.payment.refunded"
+  | "anchor.payment.failed";
+
+/**
+ * Every `anchor.*` event type: the union of the SEP-24 deposit, SEP-24
+ * withdrawal and SEP-31 payment event types, each combining a flow with an
+ * {@link AnchorFlowStage}.
+ */
+export type AnchorFlowEventType =
+  AnchorDepositEventType | AnchorWithdrawalEventType | AnchorPaymentEventType;
+
+/**
+ * A normalized anchor lifecycle event.
+ *
+ * Off-chain anchor state and on-chain settlement are two views of one payment.
+ * These events carry the anchor's own status verbatim in `protocolStatus`
+ * alongside the normalized `type`, so nothing is lost for a compliance
+ * consumer, and expose the settlement transaction in `settlementTxHash` when -
+ * and only when - the anchor published it.
+ */
+export type AnchorFlowEvent = {
+  /** Normalized lifecycle event type. */
+  type: AnchorFlowEventType;
+  /** Which SEP the transaction belongs to. */
+  protocol: AnchorProtocol;
+  /** Lifecycle stage, duplicated from `type` for consumers that switch on it. */
+  stage: AnchorFlowStage;
+  /** The anchor's transaction id. */
+  transactionId: string;
+  /**
+   * The anchor's own status string, unmodified. `type` is the normalization;
+   * this is the source of truth a compliance consumer needs.
+   */
+  protocolStatus: Sep24Status | Sep31Status;
+  /** Base URL of the anchor that reported this transaction. */
+  anchorUrl: string;
+  /**
+   * Hash of the Stellar transaction that settled this flow, or `null` when the
+   * anchor did not expose one. Never inferred - a hash guessed from timing
+   * would be indistinguishable from fabricated data.
+   */
+  settlementTxHash: string | null;
+  /** Amount received by the anchor, when reported. */
+  amountIn?: string;
+  /** Amount delivered by the anchor, when reported. */
+  amountOut?: string;
+  /** Fee charged by the anchor, when reported. */
+  amountFee?: string;
+  /** Human-readable message from the anchor, when reported. */
+  message?: string;
+  /** ISO 8601 timestamp of the transition. */
+  timestamp: string;
+  /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
+  readonly timestampDate: Date;
+  /** The raw transaction record the anchor returned. */
+  raw?: unknown;
+};
+
+/**
+ * A normalized CAP-67 unified-stream clawback event. Unlike `mint`/`burn`
+ * (which normalize onto the existing `payment.received`/`payment.sent`
+ * shape for parity with Horizon), clawback has no Horizon-derived
+ * equivalent in this package, so it gets its own taxonomy entry.
+ */
+export type AssetClawbackEvent = {
+  /** The type of clawback event. */
+  type: AssetClawbackEventType;
+  /** The account or muxed account the asset was clawed back from. */
+  from: AccountAddress | MuxedAddress;
+  /** The asset clawed back (e.g. "USDC:GISSUER"). */
+  asset: string;
+  /** The clawed-back amount. */
+  amount: StellarAmount;
+  /** ISO 8601 timestamp of the clawback. */
+  timestamp: string;
+  /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
+  readonly timestampDate: Date;
+  /** The original raw record from the unified Soroban event stream. */
+  raw?: RawSorobanEvent;
+};
+
+/**
+ * A normalized CAP-67 unified-stream `fee` event: a classic transaction's
+ * network fee, now emitted as a discrete event. New in CAP-67 - no
+ * Horizon-derived equivalent exists in this package's current taxonomy.
+ */
+export type FeeIncurredEvent = {
+  /** The type of fee event. */
+  type: FeeIncurredEventType;
+  /** The account or muxed account that paid the fee. Contract payers are rejected during normalization. */
+  from: AccountAddress | MuxedAddress;
+  /** The fee amount (always native XLM). */
+  amount: StellarAmount;
+  /** ISO 8601 timestamp of the fee event. */
+  timestamp: string;
+  /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
+  readonly timestampDate: Date;
+  /** The original raw record from the unified Soroban event stream. */
+  raw?: RawSorobanEvent;
 };
 
 /**
@@ -431,7 +795,11 @@ export type NormalizedEvent = (
   | LiquidityPoolDepositEvent
   | LiquidityPoolWithdrawEvent
   | TrustAuthEvent
+  | AssetClawbackEvent
+  | FeeIncurredEvent
   | ContractEvent
+  | AnchorTransactionEvent
+  | AnchorFlowEvent
 ) & {
   /** Lazy, cached `Date` derived from `event.timestamp`. Non-enumerable; does not appear in JSON.stringify output. */
   readonly timestampDate: Date;
@@ -459,7 +827,13 @@ export type WatcherNotification = {
   /** The cursor position at the time of failure (for "engine.reconnecting" events). */
   cursor?: string;
   /** The source that triggered this notification. */
-  source?: "horizon" | "soroban";
+  source?: "horizon" | "soroban" | "unified";
+  /** Backpressure active flag (for `engine.backpressure`). */
+  active?: boolean;
+  /** Number of events currently queued inside the engine. */
+  queued?: number;
+  /** Queue policy in effect when backpressure was emitted. */
+  policy?: string;
   /** ISO 8601 timestamp of when this notification was emitted. */
   emittedAt: string;
   /** The cursor value that was expired or lost, if applicable. */
@@ -508,6 +882,7 @@ export interface AbiRegistryClientLike {
   getSpecAt?(contractId: string, ledger: number): Promise<unknown>;
 }
 
+/** Soroban RPC polling configuration: endpoint, cadence, paging, and the opt-in unified-events transport. */
 export type SorobanConfig = {
   /** Soroban RPC endpoint used for live contract-event polling. */
   rpcUrl: string;
@@ -522,6 +897,15 @@ export type SorobanConfig = {
    * Must be an integer from 1 through 10,000. Defaults to 100.
    */
   pageLimit?: number;
+  /**
+   * Opt into the CAP-67 unified event poller (`SorobanRpcClient.pollUnifiedEvents`) -
+   * a first-class transport, started/stopped alongside Horizon SSE and the
+   * contract-filter `SorobanSubscriber`, that polls the same RPC endpoint for
+   * classic-asset `transfer`/`mint`/`burn`/`clawback` events. Off by default.
+   * Decoding, normalizing, and dispatching those events to watchers is not
+   * yet wired - only the transport's start/stop/status/reconnect lifecycle is.
+   */
+  unifiedEvents?: boolean;
 };
 
 /**
@@ -539,6 +923,11 @@ export type NetworkSourceConfig = {
   soroban?: SorobanConfig;
 };
 
+/**
+ * Top-level `EventEngine` configuration: the Stellar network (or per-network
+ * sources), Horizon and Soroban endpoints, reconnect/cursor/queue tuning, and
+ * opt-in enrichment (ABI registry, taxonomy) and ingestion transports.
+ */
 export type CoreConfig = {
   /**
    * The Stellar network to connect to. Pass an array of `NetworkSourceConfig`
@@ -568,11 +957,109 @@ export type CoreConfig = {
    * only that client.
    */
   abiRegistry?: AbiRegistryClientLike | false;
+  /**
+   * Semantic taxonomy entries used to populate `semantic` on
+   * `contract.emitted` events (issue #909), handed to a `TaxonomyResolver`
+   * internally. Independent of `abiRegistry`: it maps `(contractId, topics)`
+   * to a canonical name like `asset.transferred` directly from the raw
+   * event, so it resolves even for a contract with no published ABI spec.
+   * Defaults to `SEP41_TAXONOMY` (transfer/mint/burn/clawback) when omitted;
+   * pass a different entry array to use a different taxonomy, or `false` to
+   * opt out and keep `semantic` always `undefined`. A mapping is only ever
+   * applied when it resolves deterministically - see
+   * `TaxonomyResolver.resolve` in `@orbital-stellar/abi-registry`.
+   */
+  taxonomy?: ReadonlyArray<TaxonomyEntry> | false;
   /** Soroban RPC configuration. Ignored when `network` is an array - set `soroban` per source instead. */
   soroban?: SorobanConfig;
+  /**
+   * Which event transport to prefer: `"horizon"` (default) preserves
+   * pre-Wave-1.6 behavior exactly - zero change until a consumer opts in.
+   * `"unified"` prefers the CAP-67 unified stream where one exists.
+   * `"auto"` picks between the two based on what the configured Soroban RPC
+   * supports. Throws {@link InvalidIngestionModeError} for any other value.
+   *
+   * Selecting `"unified"` or `"auto"` only changes delivery for event
+   * families with a CAP-67 unified equivalent (`payment`, `trustlineAuth` -
+   * see {@link EventFamily}/{@link resolveFamilyTransport}); every other
+   * family stays Horizon-only regardless of this setting. The resolved
+   * transport is reported on {@link EngineStatus.effectiveIngestion}.
+   */
+  ingestion?: IngestionMode;
+  /** Optional internal event queue tuning. */
+  queue?: {
+    /** High water mark for the internal engine queue. Defaults to 10000. */
+    highWaterMark?: number;
+    /** Low water mark at which backpressure is considered cleared. Defaults to 50% of highWaterMark. */
+    lowWaterMark?: number;
+    /** Backpressure policy: 'pause' | 'drop-oldest' | 'drop-newest'. Defaults to 'pause'. */
+    policy?: "pause" | "drop-oldest" | "drop-newest";
+  };
 };
 
-// Error class for invalid network validation
+/** Valid values for {@link CoreConfig.ingestion}. */
+export type IngestionMode = "unified" | "horizon" | "auto";
+
+/**
+ * The event families this package's `NormalizedEvent` taxonomy is grouped
+ * into for transport-routing purposes (see {@link resolveFamilyTransport}).
+ * Every family corresponds to one or more Horizon operation types; `payment`
+ * and `trustlineAuth` are the only ones with a CAP-67 unified equivalent
+ * today (transfer/mint/burn/clawback, and set_authorized, respectively) -
+ * every other family has no unified equivalent per the CAP-67 mapping design
+ * doc (`docs/design/cap67-mapping.md`) and stays Horizon-only regardless of
+ * ingestion mode.
+ */
+export type EventFamily =
+  | "payment"
+  | "trustlineAuth"
+  | "trustlineLimit"
+  | "accountCreated"
+  | "accountOptions"
+  | "accountMerge"
+  | "offer"
+  | "bumpSequence"
+  | "manageData"
+  | "claimableBalance"
+  | "liquidityPool";
+
+/** Event families with a CAP-67 unified-stream equivalent per the mapping design doc. */
+const UNIFIED_EQUIVALENT_FAMILIES: ReadonlySet<EventFamily> = new Set<EventFamily>([
+  "payment",
+  "trustlineAuth",
+]);
+
+/**
+ * Decides which transport should serve a given event family under a given
+ * effective mode (`"unified"` or `"horizon"` - resolving what mode is
+ * actually in effect, e.g. for an `"auto"`-style setting, is left to the
+ * caller). Pure and total: safe to call for every family without touching
+ * any engine state.
+ *
+ * This is the routing *decision* only. A family resolving to `"unified"`
+ * here reflects the CAP-67 mapping design doc's target architecture; whether
+ * an `EventEngine` actually stops delivering that family via Horizon and
+ * starts delivering it via the unified stream additionally depends on a
+ * working decoder/normalizer existing for it.
+ */
+export function resolveFamilyTransport(
+  family: EventFamily,
+  effectiveMode: "unified" | "horizon",
+): "unified" | "horizon" {
+  if (effectiveMode === "horizon") return "horizon";
+  return UNIFIED_EQUIVALENT_FAMILIES.has(family) ? "unified" : "horizon";
+}
+
+/**
+ * Thrown when an {@link EventEngine} is configured with a network name it does
+ * not recognise.
+ *
+ * Only `"mainnet"` and `"testnet"` are supported. The message names the
+ * rejected value and lists the valid ones, so a config typo is diagnosable
+ * from the error alone.
+ *
+ * @param network - The rejected network identifier, as passed to the engine.
+ */
 export class UnknownNetworkError extends Error {
   constructor(network: string) {
     const validNetworks = ["mainnet", "testnet"].join(", ");
@@ -581,11 +1068,13 @@ export class UnknownNetworkError extends Error {
   }
 }
 
+/** Engine health verdict: `ok`, plus human-readable `reasons` when it is not. */
 export type HealthCheckResult = {
   ok: boolean;
   reasons: string[];
 };
 
+/** Per-watcher subscription options: an event filter predicate and a label for observability. */
 export type SubscribeOptions = {
   /** Optional predicate applied before each event is emitted to this watcher.
    *  Return `false` to suppress delivery. If the predicate throws, the event
@@ -599,6 +1088,12 @@ export type SubscribeOptions = {
 // Contract events (Phase 1 - Soroban)
 // ---------------------------------------------------------------------------
 
+/**
+ * The normalized `type` values of Soroban contract events: `contract.invoked`
+ * for a contract function call and `contract.emitted` for a contract-emitted
+ * event. Used to filter contract subscriptions and to narrow
+ * {@link NormalizedEvent}.
+ */
 export type ContractEventType = "contract.invoked" | "contract.emitted";
 
 /**
@@ -642,6 +1137,14 @@ export type ContractEmittedEvent = {
    * decode error, or when no registry is configured.
    */
   decodedData?: unknown;
+  /**
+   * Canonical semantic name (e.g. `asset.transferred`) resolved from
+   * `CoreConfig.taxonomy` (issue #909), populated only when a mapping
+   * resolves deterministically - never guessed. Independent of
+   * `decodedData`: this resolves straight from `(contractId, topics)`, with
+   * no ABI spec required.
+   */
+  semantic?: TaxonomyResolution;
   /** Ledger sequence number where the event was emitted, when available. */
   ledger?: number;
   /** Unique event identifier from the Soroban RPC, when available. */
@@ -660,10 +1163,22 @@ export type ContractEmittedEvent = {
 /** Discriminated union of every normalized Soroban contract event. */
 export type ContractEvent = ContractInvokedEvent | ContractEmittedEvent;
 
+/**
+ * Tells a contract subscriber that a `contract.emitted` event could not be
+ * decoded with an ABI spec: no spec was found for the contract, the registry
+ * lookup failed, or decoding with the spec failed. `EventEngine` emits it as
+ * `event.decode_failed` on the `Watcher` of each `subscribeContract(id)`
+ * subscription whose filters match the event, then still delivers the event
+ * with `decodedData` undefined. It is raised only while ABI decoding is on,
+ * which it is unless `CoreConfig.abiRegistry` is `false`.
+ */
 export type DecodeFailedNotification = {
   type: "event.decode_failed";
+  /** The contract that emitted the event. */
   contractId: ContractAddress;
+  /** The event's id, when it has one. */
   eventId?: string;
+  /** Why decoding failed. */
   error: string;
 };
 
@@ -712,26 +1227,46 @@ export type ContractSubscribeOptions = {
   name?: string;
 };
 
+// `events` is exported through a specifier instead of `export * as events`
+// because TypeScript attaches no TSDoc to a namespace re-export statement, so
+// check-tsdoc-coverage could not see the comment that was on it. Both forms
+// export the same namespace. The description is written twice on purpose, so
+// keep the two in step: TypeScript reads the comment inside the braces, TypeDoc
+// the one on the statement.
+import * as eventTypes from "./events.js";
+
 /**
- * Namespace grouping all per-event named types for precise type narrowing.
- * @see {@link events} for the full list of narrower per-event types.
+ * Namespace grouping the named per-event types (`events.PaymentEvent`,
+ * `events.TrustlineEvent`, ...), the same types the package root exports by
+ * name. Use it to type a handler for one kind of event; it holds types only,
+ * so import it with `import type`.
  *
  * @example
  * import type { events } from "@orbital-stellar/pulse-core";
  * function handlePayment(e: events.PaymentEvent) { ... }
  */
-export * as events from "./events.js";
+export {
+  /**
+   * Namespace grouping the named per-event types (`events.PaymentEvent`,
+   * `events.TrustlineEvent`, ...), the same types the package root exports by
+   * name. Use it to type a handler for one kind of event; it holds types only,
+   * so import it with `import type`.
+   */
+  eventTypes as events,
+};
 
 // ---------------------------------------------------------------------------
 // Phase 1 - new RPC-shaped contract subscription API
 // ---------------------------------------------------------------------------
 
+/** RPC-shaped filter for contract subscriptions: event kind, contract ids, and topic filters. */
 export type ContractFilter = {
   type?: "system" | "contract" | "diagnostic";
   contractIds?: string[];
   topics?: string[][];
 };
 
+/** Contract subscription configuration: one or more {@link ContractFilter}s selecting the events to receive. */
 export type ContractSubscriptionConfig = {
   filters: ContractFilter[];
 };

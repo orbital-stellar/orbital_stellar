@@ -1,162 +1,168 @@
-# Long-range replay: design doc (issue #920 / "12.6")
+# Long-range replay beyond RPC retention
 
-**Status: draft, not maintainer-signed-off.** Issue #920's own acceptance
-criteria require this doc to be "signed off by a maintainer before
-implementation." No maintainer review has happened. This draft exists as a
-stand-in so the `HistoricalSource` interface and reference adapter added
-alongside it (see below) have *something* concrete to be reviewed against,
-per an explicit user decision to proceed this way rather than leave the issue
-untouched. Treat every recommendation below as a starting proposal, not a
-decision. If maintainer review changes the source choice, reconcile the code
-to that decision, not the other way around - the same posture already taken
-for the taxonomy placeholder in `packages/abi-registry/src/taxonomy/README.md`
-(issue "7.7").
+Design note for issue #920 ("12.6 Long-range replay via Composable Data
+Platform and CAP-67 backfill"). The issue's implementation note is explicit
+that this is the one issue in the backlog where implementing before agreeing
+the source risks building the wrong thing entirely - this document is that
+agreement, written before any code.
 
-## A note on this issue's own prerequisites
+## 1. The problem, verified live
 
-Issue #920 names three dependencies: "6.12" (transport routing), "6.14"
-(unified cursor format), and "8.4" (issue #891, an e2e test). As of this
-writing:
+Soroban RPC retains a bounded window of ledger history. Querying it directly
+(`https://soroban-testnet.stellar.org`, 2026-09-14) confirms the exact shape
+of the failure:
 
-- **"6.12" and "6.14" do not correspond to any findable GitHub issue** in
-  `determined-001/orbital_stellar` (searched by number and title text - no
-  match). They may be internal roadmap/tracker numbering that was never filed
-  as issues, or issues that were since renumbered or removed.
-- **"8.4" (#891) is open and itself labeled `blocked`** - not done.
-- The roadmap (`ROADMAP.md`, Wave 2.4) lists this item as **"not yet
-  scheduled to a wave."**
+```
+latest ledger: 4679957
+requesting startLedger: 4479957 (200,000 ledgers back)
 
-None of the three prerequisites this issue says to build on top of actually
-exist yet. That's a real risk: implementing `EventEngine` routing changes now,
-before "6.12"'s routing design and "6.14"'s cursor format exist, means
-guessing at both and likely conflicting with whatever they turn out to be.
-This is why the code in this change is deliberately **not wired into
-`EventEngine`** - see "Scope of this change" below.
+ERROR: { code: -32600, message: "startLedger must be within the ledger
+  range: 4558999 - 4679958" }
+```
 
-## Problem
+`(4679958 - 4558999) × 5s ≈ 6.9999 days` - confirms the issue's "roughly
+seven days" and, more usefully, gives the exact mechanism: a JSON-RPC error
+with `code: -32600` whose `message` names the currently-retained range in
+plain text. This is not a documented, stable API contract (parsing an error
+string is inherently fragile to a wording change), but it is the only
+signal Soroban RPC actually gives today, and **it is what makes "out-of-
+retention errors name the retention boundary" (the issue's own acceptance
+criterion) possible at all** - the boundary comes from the RPC's own error,
+not a guessed constant.
 
-Soroban RPC retains roughly seven days of ledger history (see
-`OnChainAbiRegistryClient`'s `DEFAULT_LOOKBACK_LEDGERS` comment and
-`packages/abi-registry/CHANGELOG.md` for the same constraint surfacing
-elsewhere in this codebase). Audit and compliance use cases - the anchor
-starter in particular - need replay across months. Today, a cursor pointing
-at a ledger the RPC no longer serves fails with whatever raw error the RPC
-happens to return; there's no code path that recognizes "this cursor
-predates retention" as a distinct, nameable condition.
+## 2. Source choice: a backfill-configured RPC, not Galexie
 
-## Candidate sources
+The issue asks for a documented choice between a Galexie export bucket and
+a `BACKFILL_STELLAR_ASSET_EVENTS`-populated RPC, with cost and latency
+analysis.
 
-### Option A - Galexie exports (Composable Data Platform)
+**Choice: a second Soroban RPC endpoint configured with extended retention**
+(a self-hosted node with `--history-retention-window` raised, or a
+third-party provider's deep-retention endpoint). Reasons:
 
-Galexie is Stellar's ledger-export tool: it consumes `LedgerCloseMeta` from
-Captive Core and writes it out as compressed XDR files, partitioned by ledger
-range, to an object-storage bucket (GCS/S3-compatible). A long-range replay
-source built on this reads those exported files directly and re-derives
-contract events from the raw ledger data - no RPC involved for the
-beyond-retention range.
+| | Backfill RPC | Galexie (Composable Data Platform) |
+| --- | --- | --- |
+| **API shape** | Identical `getEvents(startLedger, filters, cursor)` this engine already calls | Raw `LedgerCloseMeta` XDR exports to GCS/BigQuery - a different data shape entirely |
+| **Engineering cost** | Zero new parsing - the existing `SorobanSubscriber`/event-decode path is reused unchanged | Net-new: XDR ledger-close-meta parsing, contract-event extraction, and a GCS/BigQuery client, none of which exist in this codebase today |
+| **Latency for this use case** | Comparable to a normal `getEvents` call - seconds | Batch-export model: a BigQuery scan or a cold GCS object fetch, meaningfully slower for "replay this narrow range now" |
+| **Cost model** | Bounded, known infra cost (extra retention storage on an RPC node) | Usage-based BigQuery/GCS billing, plus the one-time and ongoing cost of maintaining a second parser |
+| **Fits the actual use case** | Yes - audit/compliance replay of a specific worker's narrow ledger range (the issue's own stated case) | Better suited to bulk historical analytics across the whole ledger, which is not what a worker-verification replay needs |
 
-**Cost.** Bucket storage + egress bandwidth, borne by whoever operates the
-bucket (Orbital, if self-hosted; free if consuming an SDF- or
-community-operated public export instead). No compute cost beyond
-per-request XDR parsing - there's no always-on service, so idle cost is
-near zero.
+**The codebase already signals this choice.** `backfillReplay.e2e.test.ts`
+(issue 6.15, closed) and `.github/workflows/integration.yml` already define
+`BACKFILL_RPC_URL`, `BACKFILL_START_LEDGER`, `BACKFILL_END_LEDGER`,
+`BACKFILL_CONTRACT_ID` - a second-RPC-endpoint shape, not a Galexie-shape
+env var among them. This design formalizes what that scaffold already
+assumes rather than introducing a third option.
 
-**Latency.** Higher per-event latency than RPC (fetch + decompress + parse a
-whole ledger-range file to extract a handful of events), but replay of a
-beyond-retention range is inherently a batch/backfill operation, not a
-latency-sensitive one. Acceptable.
+Galexie is not rejected outright - the "what this note does not decide"
+section below leaves it open for a genuinely bulk historical-analytics use
+case, which is a different problem from replaying one worker's window.
 
-**Fit with the roadmap's own framing.** `ROADMAP.md` Wave 2.4 explicitly
-names this: "built on top of the Composable Data Platform (Galexie exports)
-and CAP-67 retroactive backfill, not as an Orbital-operated ledger store."
-Reading directly from an export bucket per-request, with no persistent
-Orbital-side ledger database, satisfies "not an Orbital-operated ledger
-store" literally - there's nothing to operate, only a store to read.
+## 3. `HistoricalSource`: adapter-agnostic by construction
 
-**Downside.** Nobody on this session's task has verified Galexie's actual
-object-key/partitioning scheme against a live bucket - the reference adapter
-below makes that scheme a caller-supplied parameter for exactly this reason
-(see "Verification gap"). Parsing `LedgerCloseMeta` XDR to re-derive
-contract events (walking `TransactionMeta` v3's `sorobanMeta`) is also
-untested against real exported data in this session - no Node runtime was
-available to run it.
+```ts
+export interface HistoricalSource {
+  /** True if this source's own retention covers `ledger`. Cheap - may be a bound check, not a network call. */
+  covers(ledger: number): Promise<boolean> | boolean;
+  /** Same event shape and pagination contract as SorobanRpcLike.getEvents. */
+  getEvents(request: GetEventsRequest): Promise<GetEventsResponse>;
+}
+```
 
-### Option B - RPC with extended retention (`BACKFILL_STELLAR_ASSET_EVENTS`)
+Deliberately the *same shape* Soroban RPC's `getEvents` already has - not
+a bespoke "historical event" type. This is what lets a `HistoricalSource`
+plug into the exact same decode path `SorobanSubscriber` already runs,
+producing byte-identical `NormalizedEvent` output regardless of which
+source answered (the issue's own acceptance criterion). One reference
+adapter: `RpcHistoricalSource`, wrapping any second `SorobanRpcLike` -
+concretely, a backfill-configured RPC per §2, but the interface does not
+know or care that the adapter happens to be an RPC client. A Galexie-backed
+adapter would implement the same two methods differently.
 
-Some Soroban RPC operators can run with an extended event-retention window
-(the closed issue-6.15 e2e harness already targets an arbitrary RPC via
-`BACKFILL_RPC_URL`/`BACKFILL_START_LEDGER`/`BACKFILL_END_LEDGER` env vars -
-see `packages/pulse-core/test/integration/backfillReplay.e2e.test.ts`). A
-long-range source here is just `EventEngine.replayContracts()` pointed at
-such an RPC - no new code needed at all, only an operational dependency on
-finding/running an RPC with the extended window.
+## 4. Wiring: extends `replayContracts`, does not bypass transport routing
 
-**Cost.** Whatever the RPC operator charges (or the compute/storage cost of
-running one) for the extended retention window - this is not a fixed,
-predictable cost the way bucket storage is, and depends entirely on which
-operator's RPC is used.
+Per the issue's implementation note 3: `HistoricalSource` must not become a
+second source-selection path alongside 6.12's `effectiveIngestion`
+(`"unified" | "horizon"`) live-streaming routing. It does not - `EventEngine`
+already has exactly one place that does bounded, cursor-free, one-shot
+ledger-range replay: `replayContracts` (§ used by `backfillReplay.e2e.test.ts`
+today). `HistoricalSource` is a fallback *within that one method*, not a
+second entry point:
 
-**Latency.** Lowest - it's the same `getEvents` RPC call path already in
-production use, no new parsing.
+1. `replayContracts` is called with `startLedger` as always.
+2. If the primary `rpc.getEvents` call fails with the `-32600` /
+   "must be within the ledger range" shape from §1, and a `historicalSource`
+   was configured, `EventEngine` parses the retained lower bound from the
+   error, and - only if `startLedger` is older than it - retries the same
+   request shape against `historicalSource` instead.
+3. Once the historical source's own coverage is exhausted (or was never
+   configured), the error is re-thrown as `OutOfRetentionError`, naming
+   the parsed retention boundary and whether a historical source was
+   configured, per the acceptance criterion.
 
-**Downside.** This is **not** what `ROADMAP.md` names as the answer, and
-depending on one RPC operator's willingness to serve months of history
-is a single point of control Orbital doesn't own. It also doesn't fit "not an
-Orbital-operated ledger store" as cleanly if Orbital ends up running that
-extended-retention RPC node itself.
+`effectiveIngestion`'s live-streaming routing is untouched - this fallback
+only ever fires inside a bounded, already-terminating replay run.
 
-## Recommendation
+## 5. Cursor compatibility (issue 6.14)
 
-**Galexie export-bucket reads (Option A) as the primary `HistoricalSource`
-implementation**, matching the roadmap's explicit wording. Option B remains
-useful as a **stopgap for the existing e2e harness** (issue 6.15's test
-already exercises it, and that test should keep doing so rather than being
-duplicated) but should not become the long-term `HistoricalSource`
-reference adapter, since it's the one path the roadmap explicitly says
-*not* to build the permanent story on.
+`docs/cursor-format.md` already specifies the unified-stream cursor as a
+`toid`-style, lexically-sortable string - "two cursors can be compared as
+plain strings without decoding them." `RpcHistoricalSource.getEvents`
+returns the same cursor shape Soroban RPC's `getEvents` does (both are
+`toid`-style pagination cursors over the same ledger/tx/operation ordering),
+so a cursor obtained mid-replay from the primary RPC and one obtained from
+the historical source compare and chain correctly without a translation
+layer. This is what "one cursor spans both transports" means in practice:
+no new cursor format, because both transports already speak the same one.
 
-This recommendation is not maintainer-approved. It is the basis for the
-`GalexieHistoricalSource` reference adapter added alongside this doc.
+## 6. What this note does not decide
 
-## Scope of this change
+- **A Galexie adapter.** Left open here; it has since shipped as
+  `GalexieHistoricalSource` (see §7).
+- **Which backfill-RPC provider or self-hosted retention window to run in
+  production.** An infrastructure/ops decision, not an interface one.
+- **Error-string parsing fragility (§1).** Soroban RPC does not publish a
+  stable, structured "oldest retained ledger" field today. If a future RPC
+  version changes the message wording, `OutOfRetentionError`'s boundary
+  parsing degrades to "boundary unknown" rather than crashing - documented
+  in the implementation, not silently assumed stable forever.
 
-Per an explicit user decision (given the missing "6.12"/"6.14" prerequisites
-above), this change adds:
+## Review checklist
 
-1. `packages/pulse-core/src/HistoricalSource.ts` - a standalone interface
-   for a beyond-retention historical source, plus a `RetentionBoundaryError`
-   naming the retention boundary and the configured source name (satisfying
-   the issue's "out-of-retention errors name the retention boundary and the
-   configured historical source" acceptance criterion in isolation).
-2. `GalexieHistoricalSource`, one reference adapter implementing that
-   interface against Galexie-style exported ledger files.
+1. Is a backfill-configured second RPC (§2) the right source, given the
+   codebase's own existing `BACKFILL_*` env var scaffold already assumes it?
+2. Is falling back *within* `replayContracts` (§4), rather than adding a
+   second routing path, the right integration point?
+3. Is parsing the retention boundary from Soroban RPC's own `-32600` error
+   text (§1) - the only signal available today - an acceptable foundation,
+   given its documented fragility?
 
-It deliberately does **not**:
+## 7. Galexie adapter
 
-- Wire `HistoricalSource` into `EventEngine` or `CursorStore` - "6.12"'s
-  transport-routing design doesn't exist yet to plug into, and the issue
-  itself says not to add a second, parallel source-selection path.
-- Define a new cursor format - "6.14" doesn't exist yet either. The
-  interface's cursor fields are typed as opaque strings, matching every
-  other cursor in this codebase (`CursorStore`'s own doc comment: "Cursor
-  values are source-local opaque strings"). When "6.14" lands, reconcile to
-  its format.
-- Extend the issue-6.15 e2e harness. That harness tests the *existing*
-  RPC-based `replayContracts()` path (Option B) against a live RPC; this
-  change adds no live-network code that harness would exercise, since
-  nothing here is wired into `EventEngine` yet. Extending it is future work
-  once `HistoricalSource` actually has a caller.
+`GalexieHistoricalSource` implements the same `HistoricalSource` interface
+against a Galexie export (SEP-54: `.config.json`, one zstd
+`LedgerCloseMetaBatch` per object). It keeps §3's promise that the source
+does not change what callers see: `getEvents` returns what Stellar RPC
+returns, so nothing downstream changes.
 
-## Verification gap
+- **Event order and IDs** follow stellar-rpc's ingestion
+  (`PayloadsFromLedgerEvents`): before-all-txs events at `(0, 0)` counted
+  ledger-wide, then per transaction its operation events at `(tx, op)` and
+  after-tx events at `(tx, 0xfff)`, then after-all-txs events at
+  `(0xfffff, 0)`. Meta v3 Soroban events count as operation 0.
+- **JSON format** reproduces `xdr2json` (`stellar-xdr` serde): tagged
+  snake_case unions, 64-bit and wider integers as decimal strings, hex
+  bytes, SEP-51-escaped strings.
+- **Paging** mirrors RPC: cursors are `%019d-%010d` toid strings, a full
+  page returns the last event's ID, and a short page returns the end of the
+  scanned window, at most 10,000 ledgers per call.
+- **Verified** against mainnet RPC for every event in seven ledgers across
+  the retention window (5,896 events), byte for byte in both formats. One
+  of those ledgers and RPC's answer for it are kept as a test fixture.
 
-Nothing in this change has been run against a live Galexie bucket or a real
-exported `LedgerCloseMeta` file - there is no Node.js runtime available in
-the environment this change was authored in (true throughout this session;
-every other PR in this session carries the same caveat). The reference
-adapter's XDR-parsing assumptions (`LedgerCloseMeta` v1/v2's
-`txProcessing` → `TransactionMeta` v3 → `sorobanMeta().events()` path) match
-the public CAP-46/CAP-67 XDR schema as documented, but the exact
-`@stellar/stellar-sdk` generated accessor names have not been checked
-against the installed SDK version. Treat the adapter as illustrative of the
-intended shape, not verified-working code, until it's actually run against
-a real export.
+Cost is the trade-off §2 predicted. With no index, a scan downloads every
+ledger in the window (about 200 KB each on mainnet today), so a 10,000-ledger
+call that matches nothing moves about 2 GB. It suits replaying a bounded
+range past RPC retention, not open-ended scans.
+

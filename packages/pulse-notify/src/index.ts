@@ -10,9 +10,21 @@ import type {
 import { acquireWsConnection } from "./wsTransport.js";
 export { useStellarEventSuspense } from "./useStellarEventSuspense.js";
 
+/**
+ * Configuration object accepted by `useStellarEvent`.
+ *
+ * The positional `(serverUrl, address, options)` form cannot express
+ * `transport`, so pass a config object when you need a WebSocket stream.
+ *
+ * @typeParam T - Event type surfaced in {@link EventState.event}. Defaults to
+ *   the full `NormalizedEvent` union.
+ */
 export type UseEventConfig<T extends NormalizedEvent = NormalizedEvent> = {
+  /** Base URL of the pulse-notify server */
   serverUrl: string;
+  /** Stellar account address to watch */
   address: string;
+  /** Event type(s) to accept. Defaults to all events (`"*"`). */
   event?: string | string[];
   /** API key forwarded as ?token= query param - required when the server has authentication enabled */
   token?: string;
@@ -36,10 +48,20 @@ export type UseEventConfig<T extends NormalizedEvent = NormalizedEvent> = {
   hideAfterMs?: number;
 };
 
+/**
+ * State returned by the event hooks: the latest matching event plus the health
+ * of the underlying connection.
+ *
+ * @typeParam T - Event type surfaced in `event`.
+ */
 export type EventState<T extends NormalizedEvent = NormalizedEvent> = {
+  /** Latest matching event, or null until the first one arrives */
   event: T | null;
+  /** True once the stream handshake completes; false while reconnecting */
   connected: boolean;
+  /** Human-readable error message, or null while the stream is healthy */
   error: string | null;
+  /** ISO timestamp of the most recent event, or null until one arrives */
   lastEventAt: string | null;
   /** False only during the brief window after a reconnect where the stream is
    *  replaying events the browser requested via Last-Event-ID. Becomes true
@@ -87,9 +109,34 @@ function useVisibilityState(hideAfterMs = 30000): boolean {
   return isActive;
 }
 
+/**
+ * Subscribes a component to the events a pulse-notify server streams for one
+ * Stellar address and returns the latest matching event with the state of the
+ * connection. The stream is SSE unless the config asks for
+ * `transport: "websocket"`, is shared by every hook asking for the same server,
+ * address and credentials, and is released once the document has been hidden
+ * for `hideAfterMs`, until it is visible again. The hook never throws: a
+ * dropped connection, an unparseable event and an expired token are reported in
+ * {@link EventState.error}, and with a `tokenProvider` an expired token is
+ * replaced and the stream reconnects.
+ *
+ * @typeParam T - Event type surfaced in {@link EventState.event}.
+ * @param config - Every setting in one object; the only form that can set
+ *   `transport`.
+ * @returns The latest matching event and the connection state.
+ */
 export function useStellarEvent<T extends NormalizedEvent = NormalizedEvent>(
   config: UseEventConfig<T>,
 ): EventState<T>;
+/**
+ * The positional form of {@link useStellarEvent}: the same hook over SSE.
+ *
+ * @param serverUrl - Base URL of the pulse-notify server.
+ * @param address - Stellar account address to watch.
+ * @param options - The {@link UseEventConfig} settings other than `serverUrl`,
+ *   `address` and `transport`. `event` defaults to `"*"`, every event type.
+ * @returns The latest matching event and the connection state.
+ */
 export function useStellarEvent<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,
@@ -298,14 +345,39 @@ function amountToStroop(amount: string): bigint | null {
   }
 }
 
+/**
+ * State returned by `useStellarPayment` - the `EventState` fields plus the
+ * payment amount pre-converted to stroops.
+ */
 export type PaymentState = {
+  /** Latest `payment.received` event, or null until the first one arrives */
   event: PaymentEvent | null;
+  /** True once the stream handshake completes; false while reconnecting */
   connected: boolean;
+  /** Human-readable error message, or null while the stream is healthy */
   error: string | null;
+  /** ISO timestamp of the most recent event, or null until one arrives */
   lastEventAt: string | null;
+  /** `event.amount` as a bigint in stroops (1 XLM = 10,000,000), or null */
   amountStroop: bigint | null;
 };
 
+/**
+ * Watches one address for incoming payments: {@link useStellarEvent} narrowed
+ * to `payment.received`, with the amount also given in stroops. Use it for a
+ * "payment received" view or for arithmetic on the amount: `amountStroop` is
+ * computed from the event's decimal `amount` with integer arithmetic, and is
+ * `null` until a payment arrives or when the amount is not a plain
+ * non-negative decimal.
+ *
+ * @param serverUrl - Base URL of the pulse-notify server.
+ * @param address - Stellar account address to watch.
+ * @param options - `initialEvent` seeds the state before the first live event;
+ *   `filter`, `withCredentials` and `hideAfterMs` behave as in
+ *   {@link UseEventConfig}. There is no `token` option here, so an
+ *   authenticated server has to be reached with `withCredentials`.
+ * @returns The latest payment, its amount in stroops and the connection state.
+ */
 export function useStellarPayment(
   serverUrl: string,
   address: string,
@@ -331,6 +403,20 @@ export function useStellarPayment(
   return { ...base, event: paymentEvent, amountStroop };
 }
 
+/**
+ * Watches every event type for one address: {@link useStellarEvent} with
+ * `event: "*"`. Use it for an activity feed that shows whatever happens to an
+ * account; to watch one event type, use a WebSocket or pass a token, call
+ * {@link useStellarEvent} itself.
+ *
+ * @typeParam T - Event type surfaced in {@link EventState.event}.
+ * @param serverUrl - Base URL of the pulse-notify server.
+ * @param address - Stellar account address to watch.
+ * @param options - `initialEvent` seeds the state before the first live event;
+ *   `filter`, `withCredentials` and `hideAfterMs` behave as in
+ *   {@link UseEventConfig}.
+ * @returns The latest event of any type and the connection state.
+ */
 export function useStellarActivity<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,
@@ -358,13 +444,32 @@ export {
 } from "./StellarConnectionStatus.js";
 export { StellarEventBoundary } from "./StellarEventBoundary.js";
 
+/**
+ * A Zod-compatible schema object. Consumers pass the generated schema
+ * (e.g. `SwapExecutedEventSchema`) to validate and narrow event types.
+ */
+export type EventSchema<T> = {
+  safeParse: (data: unknown) => { success: true; data: T } | { success: false };
+};
+
+/**
+ * Configuration object for `useContractEvent`.
+ *
+ * @typeParam T - Contract event type surfaced in {@link EventState.event}.
+ *   Defaults to `ContractInvokedEvent | ContractEmittedEvent`; narrow it for
+ *   full IDE support.
+ */
 export type UseContractEventConfig<
   T extends ContractInvokedEvent | ContractEmittedEvent =
     ContractInvokedEvent | ContractEmittedEvent,
 > = {
+  /** Base URL of the pulse-notify server */
   serverUrl: string;
+  /** Soroban contract address (C…) to watch */
   contractId: string;
+  /** Topics that every `contract.emitted` event must carry. Unfiltered when omitted. */
   topics?: string[];
+  /** API key forwarded as ?token= query param - required when the server has authentication enabled */
   token?: string;
   /**
    * Async callback that returns a fresh token when the current one expires.
@@ -382,6 +487,14 @@ export type UseContractEventConfig<
   onEvent?: (event: NormalizedEvent) => void;
   /** Wait time before pausing active connection when document becomes hidden (ms). Defaults to 30000. */
   hideAfterMs?: number;
+  /**
+   * Optional Zod schema for runtime event data validation. When set, the
+   * hook validates every incoming event's `data` field against the schema
+   * and only surfaces validated events. Events with an explicit `event`
+   * field matching a contract event name are validated; others are passed
+   * through unchecked.
+   */
+  schema?: EventSchema<unknown>;
 };
 
 /** Hook for subscribing to Soroban contract events */
@@ -400,6 +513,7 @@ export function useContractEvent<
     withCredentials,
     onEvent,
     hideAfterMs,
+    schema,
   } = config;
 
   const filterRef = useRef(filter);
@@ -411,6 +525,14 @@ export function useContractEvent<
   useEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
+
+  // Held in a ref like `filter`: an inline schema is a new object on every
+  // render, so reading it directly inside the subscription effect would pin
+  // the first one forever (the effect deliberately does not resubscribe on it).
+  const schemaRef = useRef(schema);
+  useEffect(() => {
+    schemaRef.current = schema;
+  }, [schema]);
 
   const tokenProviderRef = useRef(tokenProvider);
   useEffect(() => {
@@ -468,6 +590,11 @@ export function useContractEvent<
           }
           // Apply user filter if provided
           if (filterRef.current && !filterRef.current(incoming)) return;
+          // Validate event data against optional schema
+          if (schemaRef.current && incoming.type === "contract.emitted") {
+            const parsed = schemaRef.current.safeParse((incoming as ContractEmittedEvent).data);
+            if (!parsed.success) return;
+          }
           // Narrow to requested generic type
           setState((prev) => ({
             ...prev,
@@ -536,7 +663,13 @@ export {
   type ContractStateResult,
 } from "./useContractState.js";
 
+/**
+ * Options for `useStellarHistory`.
+ *
+ * @typeParam T - Event type held in {@link HistoryState.history}.
+ */
 export type UseHistoryOptions<T extends NormalizedEvent = NormalizedEvent> = {
+  /** Accepted for symmetry with the other hooks; the history stream is currently opened unauthenticated */
   token?: string;
   /** Maximum number of events to retain in FIFO order. Defaults to 100. */
   capacity?: number;
@@ -545,14 +678,29 @@ export type UseHistoryOptions<T extends NormalizedEvent = NormalizedEvent> = {
   hideAfterMs?: number;
 };
 
+/**
+ * State returned by `useStellarHistory` - the `EventState` fields plus the
+ * retained events.
+ *
+ * @typeParam T - Event type held in `history`.
+ */
 export type HistoryState<T extends NormalizedEvent = NormalizedEvent> = EventState<T> & {
+  /** Buffered events in arrival order, oldest first, capped by `capacity` */
   history: T[];
 };
 
 // ─── useStellarAddresses ─────────────────────────────────────────────────────
 
+/**
+ * Options for `useStellarAddresses`, applied to every address in the call.
+ *
+ * All addresses share one config, so per-address behaviour is not possible
+ * here - use one `useStellarEvent` call per address instead.
+ */
 export type UseAddressesOptions = {
+  /** Event type(s) to accept for every address. Defaults to all events (`"*"`). */
   event?: string | string[];
+  /** API key forwarded as ?token= query param - required when the server has authentication enabled */
   token?: string;
   /**
    * Async callback that returns a fresh token when the current one expires.
@@ -759,6 +907,21 @@ export function useStellarAddresses<T extends NormalizedEvent = NormalizedEvent>
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Keeps the most recent events for one address, oldest first, on top of
+ * {@link useStellarActivity}. Use it for a list of recent activity rather than
+ * a "latest event" view: each event that arrives is appended to a buffer in
+ * component state, and the oldest are dropped once it holds more than
+ * `capacity` (100 by default). It only holds events that arrived while the
+ * component was mounted; it does not ask the server for earlier ones.
+ *
+ * @typeParam T - Event type held in {@link HistoryState.history}.
+ * @param serverUrl - Base URL of the pulse-notify server.
+ * @param address - Stellar account address to watch.
+ * @param options - See {@link UseHistoryOptions}. `token` is accepted but not
+ *   passed to the stream.
+ * @returns The connection state, the latest event and the retained events.
+ */
 export function useStellarHistory<T extends NormalizedEvent = NormalizedEvent>(
   serverUrl: string,
   address: string,

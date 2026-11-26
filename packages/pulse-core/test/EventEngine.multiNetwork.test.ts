@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type StreamHandlers = {
   onmessage: (record: unknown) => void;
@@ -19,6 +19,10 @@ vi.mock("@stellar/stellar-sdk", () => {
     operations() {
       const url = this.url;
       return {
+        // The engine asks Horizon for join=transactions; the double mirrors that.
+        join() {
+          return this;
+        },
         cursor() {
           return {
             stream(handlers: StreamHandlers) {
