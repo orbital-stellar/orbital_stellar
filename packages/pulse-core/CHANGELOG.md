@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- **`GalexieHistoricalSource`** - a `HistoricalSource` that reads contract events from a Galexie ledger export (SEP-54 layout), so `replayContracts({ historicalSource })` can replay ledgers older than any RPC's retention. It answers `getEvents` exactly as Stellar RPC does: event IDs and order, cursors, the 10,000-ledger scan window, filters, and both `xdrFormat`s. Checked against mainnet RPC for every event in seven ledgers, with a real mainnet ledger and RPC's answer for it kept as a test fixture. Reads the public AWS Open Data mainnet export or any self-hosted one. Each scanned ledger is one download, so long sparse replays are expensive; see the class docs.
+- `scValToXdrJson` / `escapeSep51` - render an `ScVal` in Stellar RPC's `xdrFormat: "json"` shape (the Rust `stellar-xdr` serde output).
+
+### Changed
+- `@stellar/stellar-sdk` is now `^16.4.1` across the workspace. 16.2.0 cannot decode mainnet ledgers from protocol 30 (`unknown StellarValueType member for value 3`).
+
 ## [0.2.0] - 2026-09-23
 
 ### Breaking Changes

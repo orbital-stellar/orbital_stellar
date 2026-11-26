@@ -40,6 +40,21 @@ export {
   parseRetentionBoundary,
   withHistoricalFallback,
 } from "./HistoricalSource.js";
+export {
+  GalexieHistoricalSource,
+  GalexieSourceError,
+  galexieObjectKey,
+  extractLedgerEvents,
+  formatEventId,
+  parseEventId,
+} from "./GalexieHistoricalSource.js";
+export type {
+  GalexieHistoricalSourceConfig,
+  GalexieExportLayout,
+  GalexieGetEventsResult,
+} from "./GalexieHistoricalSource.js";
+export { scValToXdrJson, escapeSep51, XdrJsonUnsupportedError } from "./xdrJson.js";
+export type { XdrJsonValue, XdrJsonObject } from "./xdrJson.js";
 export type { HistoricalSource } from "./HistoricalSource.js";
 
 export { validateContractFilters } from "./contractFilters.js";

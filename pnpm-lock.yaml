@@ -34,8 +34,8 @@ importers:
         specifier: workspace:*
         version: link:packages/abi-registry
       '@stellar/stellar-sdk':
-        specifier: ^16.2.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       eslint:
         specifier: ^10.10.0
         version: 10.10.0(jiti@2.7.0)
@@ -79,8 +79,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/worker-core
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       '@upstash/ratelimit':
         specifier: ^2.0.8
         version: 2.0.8(@upstash/redis@1.38.4)
@@ -167,8 +167,8 @@ importers:
         specifier: ^0.2.0
         version: 0.2.0
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       zod:
         specifier: ^4.6.6
         version: 4.6.7
@@ -293,8 +293,8 @@ importers:
         specifier: 4.0.0
         version: 4.0.0
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       yargs:
         specifier: ^18.1.0
         version: 18.1.0
@@ -328,8 +328,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       '@types/node':
         specifier: ^26.5.1
         version: 26.5.1
@@ -353,8 +353,8 @@ importers:
         version: link:../pulse-core
     devDependencies:
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       '@types/node':
         specifier: ^26.5.1
         version: 26.5.1
@@ -374,8 +374,8 @@ importers:
         specifier: workspace:*
         version: link:../abi-registry
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       yargs:
         specifier: ^18.1.0
         version: 18.1.0
@@ -482,8 +482,8 @@ importers:
         specifier: workspace:*
         version: link:../pulse-webhooks
       '@stellar/stellar-sdk':
-        specifier: ^16.1.0
-        version: 16.2.0
+        specifier: ^16.4.1
+        version: 16.4.1
       cron-parser:
         specifier: ^5.10.0
         version: 5.10.0
@@ -1249,8 +1249,8 @@ packages:
     resolution: {integrity: sha512-+NmNa7Tk5BI5XFdy/6xGTqAN4J9a9KgCrCGhj2uEUTCBhLkch0M+QbKzNH8zEnejWe0p8w+0q5hUVX6L3OzoVA==}
     engines: {node: '>=20.0.0', pnpm: '>=9.0.0'}
 
-  '@stellar/stellar-sdk@16.2.0':
-    resolution: {integrity: sha512-FV/Rm11QvrFzR5X9fIfb6Pg30KyYyrRkNezELGFmYDAYrzoPTjqo7vklnEPd2HEontzjJmZizWk8CjyIh5vp0w==}
+  '@stellar/stellar-sdk@16.4.1':
+    resolution: {integrity: sha512-0kT+ShOUE6dc0smLEsajuizss1hvlGDsCooM88FqgxNOCKpY8IuQPzCs75RNKMSMITz+dX7KZ5qGhQ2EWGMTTg==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -3996,7 +3996,7 @@ snapshots:
   '@orbital-stellar/abi-registry@0.2.0':
     dependencies:
       '@stellar/js-xdr': 4.0.0
-      '@stellar/stellar-sdk': 16.2.0
+      '@stellar/stellar-sdk': 16.4.1
       yargs: 18.1.0
     transitivePeerDependencies:
       - debug
@@ -4013,7 +4013,7 @@ snapshots:
   '@orbital-stellar/pulse-core@0.2.0':
     dependencies:
       '@orbital-stellar/abi-registry': 0.2.0
-      '@stellar/stellar-sdk': 16.2.0
+      '@stellar/stellar-sdk': 16.4.1
       yargs: 18.1.0
     transitivePeerDependencies:
       - debug
@@ -4152,7 +4152,7 @@ snapshots:
 
   '@stellar/js-xdr@4.0.0': {}
 
-  '@stellar/stellar-sdk@16.2.0':
+  '@stellar/stellar-sdk@16.4.1':
     dependencies:
       '@noble/ed25519': 3.1.0
       '@noble/hashes': 2.2.0

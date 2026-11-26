@@ -118,9 +118,8 @@ no new cursor format, because both transports already speak the same one.
 
 ## 6. What this note does not decide
 
-- **A Galexie adapter.** Left for whoever has an actual bulk-analytics use
-  case that needs it - §2 is not a permanent rejection, just not this
-  issue's problem.
+- **A Galexie adapter.** Left open here; it has since shipped as
+  `GalexieHistoricalSource` (see §7).
 - **Which backfill-RPC provider or self-hosted retention window to run in
   production.** An infrastructure/ops decision, not an interface one.
 - **Error-string parsing fragility (§1).** Soroban RPC does not publish a
@@ -138,3 +137,32 @@ no new cursor format, because both transports already speak the same one.
 3. Is parsing the retention boundary from Soroban RPC's own `-32600` error
    text (§1) - the only signal available today - an acceptable foundation,
    given its documented fragility?
+
+## 7. Galexie adapter
+
+`GalexieHistoricalSource` implements the same `HistoricalSource` interface
+against a Galexie export (SEP-54: `.config.json`, one zstd
+`LedgerCloseMetaBatch` per object). It keeps §3's promise that the source
+does not change what callers see: `getEvents` returns what Stellar RPC
+returns, so nothing downstream changes.
+
+- **Event order and IDs** follow stellar-rpc's ingestion
+  (`PayloadsFromLedgerEvents`): before-all-txs events at `(0, 0)` counted
+  ledger-wide, then per transaction its operation events at `(tx, op)` and
+  after-tx events at `(tx, 0xfff)`, then after-all-txs events at
+  `(0xfffff, 0)`. Meta v3 Soroban events count as operation 0.
+- **JSON format** reproduces `xdr2json` (`stellar-xdr` serde): tagged
+  snake_case unions, 64-bit and wider integers as decimal strings, hex
+  bytes, SEP-51-escaped strings.
+- **Paging** mirrors RPC: cursors are `%019d-%010d` toid strings, a full
+  page returns the last event's ID, and a short page returns the end of the
+  scanned window, at most 10,000 ledgers per call.
+- **Verified** against mainnet RPC for every event in seven ledgers across
+  the retention window (5,896 events), byte for byte in both formats. One
+  of those ledgers and RPC's answer for it are kept as a test fixture.
+
+Cost is the trade-off §2 predicted. With no index, a scan downloads every
+ledger in the window (about 200 KB each on mainnet today), so a 10,000-ledger
+call that matches nothing moves about 2 GB. It suits replaying a bounded
+range past RPC retention, not open-ended scans.
+

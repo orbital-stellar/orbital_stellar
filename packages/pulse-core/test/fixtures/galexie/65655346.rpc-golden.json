@@ -1,0 +1,130 @@
+{
+  "source": "mainnet RPC getEvents (https://mainnet.sorobanrpc.com), startLedger 65655346, endLedger 65655347, no filters, recorded 2026-11-26",
+  "ledger": 65655346,
+  "count": 428,
+  "sha256": {
+    "base64": "4c1ad1759d3d163f265d27c71ef3e61e16f56a8c6a43d7226bb8a47d1e1d3ef1",
+    "json": "100c4f08bfda473d072fd0f51b2fe36672f2aa9966526dcd499b9692164abf00"
+  },
+  "samples": {
+    "firstBase64": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+      "id": "0281987563877564416-0000000000",
+      "operationIndex": 0,
+      "transactionIndex": 0,
+      "txHash": "8b94883900f425411b7b05cb428f37cc409c9f874cffc09a037d26ab724cce7f",
+      "topic": ["AAAADwAAAANmZWUA", "AAAAEgAAAAAAAAAAB1gpiezMtNJmRKYkx9q/AskWnKA+iFv9oqucxKIG/HU="],
+      "value": "AAAACgAAAAAAAAAAAAAAAAAAAGQ="
+    },
+    "firstJson": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+      "id": "0281987563877564416-0000000000",
+      "operationIndex": 0,
+      "transactionIndex": 0,
+      "txHash": "8b94883900f425411b7b05cb428f37cc409c9f874cffc09a037d26ab724cce7f",
+      "topicJson": [
+        {
+          "symbol": "fee"
+        },
+        {
+          "address": "GADVQKMJ5TGLJUTGISTCJR62X4BMSFU4UA7IQW75UKVZZRFCA36HLG62"
+        }
+      ],
+      "valueJson": {
+        "i128": "100"
+      }
+    },
+    "lastBase64": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+      "id": "0281987568172527616-0000000059",
+      "operationIndex": 0,
+      "transactionIndex": 1048575,
+      "txHash": "fe75496b90cd5e64c54679b83ecc0450c8015278f13e37f7f357213d576fddfa",
+      "topic": ["AAAADwAAAANmZWUA", "AAAAEgAAAAAAAAAANJjBxfEBs8LDEQYXvYvD0iKsYzYyskDMl2TgwQHYQFM="],
+      "value": "AAAACv//////////////////66U="
+    },
+    "escapedStringJson": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CBG4QGCVAAMHJYQJ4RSOOANUWVL72DA4XEXTUQSNKSXRJVKMHIVEAPEP",
+      "id": "0281987563877588992-0000000000",
+      "operationIndex": 0,
+      "transactionIndex": 6,
+      "txHash": "78ab85675adff869cfc8f045e31a921e7291969cd085263bb13be39ab70f0795",
+      "topicJson": [
+        {
+          "symbol": "mint"
+        },
+        {
+          "address": "GC4AGW2QPRYLDTGHNADUZY6KXW3DE644RCUGXX2GKLNTFX5A5HBL3AQQ"
+        },
+        {
+          "string": "STARDUST:GCPLNANLXTV2G6NPIRDPOLM5NAO5XH2IPYQBZCTTAKPNV4IRTU5X5B4S"
+        }
+      ],
+      "valueJson": {
+        "map": [
+          {
+            "key": {
+              "symbol": "amount"
+            },
+            "val": {
+              "i128": "1115783556739"
+            }
+          },
+          {
+            "key": {
+              "symbol": "to_muxed_id"
+            },
+            "val": {
+              "string": "staking reward: 5121\\xe2\\x80\\xa6d795"
+            }
+          }
+        ]
+      }
+    },
+    "escapedStringBase64": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CBG4QGCVAAMHJYQJ4RSOOANUWVL72DA4XEXTUQSNKSXRJVKMHIVEAPEP",
+      "id": "0281987563877588992-0000000000",
+      "operationIndex": 0,
+      "transactionIndex": 6,
+      "txHash": "78ab85675adff869cfc8f045e31a921e7291969cd085263bb13be39ab70f0795",
+      "topic": [
+        "AAAADwAAAARtaW50",
+        "AAAAEgAAAAAAAAAAuANbUHxwsczHaAdM48q9tjJ7nIioa99GUtsy36Dpwr0=",
+        "AAAADgAAAEFTVEFSRFVTVDpHQ1BMTkFOTFhUVjJHNk5QSVJEUE9MTTVOQU81WEgySVBZUUJaQ1RUQUtQTlY0SVJUVTVYNUI0UwAAAA=="
+      ],
+      "value": "AAAAEQAAAAEAAAACAAAADwAAAAZhbW91bnQAAAAAAAoAAAAAAAAAAAAAAQPJ4e6DAAAADwAAAAt0b19tdXhlZF9pZAAAAAAOAAAAG3N0YWtpbmcgcmV3YXJkOiA1MTIx4oCmZDc5NQA="
+    },
+    "transferBase64": {
+      "type": "contract",
+      "ledger": 65655346,
+      "ledgerClosedAt": "2026-11-24T23:26:24Z",
+      "contractId": "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+      "id": "0281987563877568512-0000000000",
+      "operationIndex": 0,
+      "transactionIndex": 1,
+      "txHash": "8b94883900f425411b7b05cb428f37cc409c9f874cffc09a037d26ab724cce7f",
+      "topic": [
+        "AAAADwAAAAh0cmFuc2Zlcg==",
+        "AAAAEgAAAAAAAAAAB1gpiezMtNJmRKYkx9q/AskWnKA+iFv9oqucxKIG/HU=",
+        "AAAAEgAAAAAAAAAA4/LsDZ0Stissr3VI3y/Ub5uetQpmtowE9U6Y1ibYpSk=",
+        "AAAADgAAAAZuYXRpdmUAAA=="
+      ],
+      "value": "AAAACgAAAAAAAAAAAAAAAAAAA+g="
+    }
+  }
+}
