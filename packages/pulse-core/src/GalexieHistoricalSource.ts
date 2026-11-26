@@ -475,6 +475,13 @@ export interface GalexieGetEventsResult {
   cursor: string;
 }
 
+/** Drops trailing slashes in linear time (a `/\/+$/` regex backtracks on long runs). */
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 0x2f) end--;
+  return url.slice(0, end);
+}
+
 /** See the module comment. */
 export class GalexieHistoricalSource implements HistoricalSource {
   private readonly baseUrl: string;
@@ -489,7 +496,7 @@ export class GalexieHistoricalSource implements HistoricalSource {
   private readonly recent = new Map<number, DecodedLedger>();
 
   constructor(private readonly config: GalexieHistoricalSourceConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(config.baseUrl);
     this.fetchImpl = config.fetch ?? fetch.bind(globalThis);
     this.decompress = config.decompress;
     this.earliestLedger = config.earliestLedger ?? 2;

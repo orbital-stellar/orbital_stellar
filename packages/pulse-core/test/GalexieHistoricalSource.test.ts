@@ -295,6 +295,17 @@ describe("export layout", SLOW, () => {
     ).toBe("FFFFFFFA--5.xdr.zstd");
   });
 
+  it("accepts a base URL with trailing slashes", async () => {
+    const { fetchImpl } = fakeExport();
+    const source = new GalexieHistoricalSource({
+      baseUrl: `${BASE_URL}///`,
+      fetch: fetchImpl,
+      decompress: (data) => data,
+    });
+    const { events } = await allEvents(source, "base64");
+    expect(events).toHaveLength(GOLDEN.count);
+  });
+
   it("reads the layout from .config.json once", async () => {
     const { source, calls } = makeSource();
     await allEvents(source, "base64");
