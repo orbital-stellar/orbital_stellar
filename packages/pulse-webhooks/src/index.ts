@@ -9,7 +9,8 @@ import type {
 
 import { timingSafeEqual, randomUUID } from "crypto";
 import { lookup } from "dns/promises";
-import { BlockList, isIP } from "net";
+import type { LookupAddress } from "node:dns";
+import { Agent } from "undici";
 
 import type { DeadLetterStore as DeadLetterStoreInterface } from "./DeadLetterStore.js";
 import { MemoryDeadLetterStore } from "./MemoryDeadLetterStore.js";
@@ -17,27 +18,33 @@ import { exponentialJittered } from "./backoff.js";
 import type { BackoffStrategy } from "./backoff.js";
 import type { RetryQueue, RetryRecord } from "./RetryQueue.js";
 import { signWebhookPayload } from "./signing.js";
+import {
+  isIpLiteral,
+  isLoopbackHostname,
+  isPrivateIpLiteral,
+  normalizeHostname,
+} from "./private-ip.js";
 import type { Tracer, UrlEntry, VerifyWebhookOptions, WebhookConfig } from "./types.js";
 import { DEFAULT_MAX_AGE_MS, DEFAULT_CLOCK_SKEW_MS } from "./types.js";
 import { NOOP_WEBHOOK_METRICS } from "./metrics.js";
 
-const BLOCKED_WEBHOOK_ADDRESSES = new BlockList();
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("10.0.0.0", 8, "ipv4");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("127.0.0.0", 8, "ipv4");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("172.16.0.0", 12, "ipv4");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("192.168.0.0", 16, "ipv4");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("169.254.0.0", 16, "ipv4");
-BLOCKED_WEBHOOK_ADDRESSES.addAddress("::1", "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("fc00::", 7, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("fe80::", 10, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("::ffff:a00:0", 104, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("::ffff:7f00:0", 104, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("::ffff:ac10:0", 108, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("::ffff:c0a8:0", 112, "ipv6");
-BLOCKED_WEBHOOK_ADDRESSES.addSubnet("::ffff:a9fe:0", 112, "ipv6");
-
 const BLOCKED_ADDRESS_ERROR = "Webhook URL points to a blocked private address";
+type ValidatedAddress = { address: string; family: 4 | 6 };
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
 export { signWebhookPayload } from "./signing.js";
+// Previously unreachable: `UrlValidator`'s own docs said consumers wire it in
+// front of their own fetch, but it was never re-exported here, so nobody could.
+export { UrlValidator } from "./url-validator.js";
+export {
+  isIpLiteral,
+  isLoopbackHostname,
+  isPrivateIpLiteral,
+  normalizeHostname,
+} from "./private-ip.js";
 export { configureDeadLetterStore } from "./DeadLetterStore.js";
 export type {
   DeadLetterEntry,
@@ -46,9 +53,15 @@ export type {
   ReplayHandler,
 } from "./DeadLetterStore.js";
 export type { DeadLetterStoreInterface };
+/** Alias of {@link DeadLetterStoreInterface} for consumers importing the store contract from the entry point. */
 export type DeadLetterStore = DeadLetterStoreInterface;
 export { MemoryDeadLetterStore };
-/** @deprecated Use {@link MemoryDeadLetterStore} instead. */
+/**
+ * Alias of {@link MemoryDeadLetterStore} for consumers importing the default
+ * store from the entry point.
+ *
+ * @deprecated Use {@link MemoryDeadLetterStore} instead.
+ */
 export const DeadLetterStore = MemoryDeadLetterStore;
 export { NOOP_WEBHOOK_METRICS, CountingWebhookMetrics } from "./metrics.js";
 export { PrometheusWebhookMetrics } from "./PrometheusWebhookMetrics.js";
@@ -193,6 +206,12 @@ function normalizeUrlConfig(url: WebhookConfig["url"]): {
   return { urls, urlTimeouts };
 }
 
+/**
+ * Delivers watcher events to configured webhook URLs with retries, backoff,
+ * concurrency caps, optional durable retry queue, HMAC signing, and
+ * dead-letter persistence. Construct with a `Watcher`, a {@link WebhookConfig},
+ * and optionally a dead-letter store; call `stop()` to shut down delivery.
+ */
 export class WebhookDelivery {
   private config: ResolvedWebhookConfig;
   private watcher: Watcher;
@@ -353,12 +372,12 @@ export class WebhookDelivery {
       return { ok: false, error: customValidationError, terminal: true };
     }
 
-    const resolvedHostnameError = await this.validateResolvedHostname(url);
+    const resolvedHostname = await this.validateResolvedHostname(url);
     if (this.watcher.stopped) return { ok: false, error: "stopped", terminal: true };
 
-    if (resolvedHostnameError) {
-      const isTerminal = resolvedHostnameError === BLOCKED_ADDRESS_ERROR;
-      return { ok: false, error: resolvedHostnameError, terminal: isTerminal };
+    if (resolvedHostname.error) {
+      const isTerminal = resolvedHostname.error === BLOCKED_ADDRESS_ERROR;
+      return { ok: false, error: resolvedHostname.error, terminal: isTerminal };
     }
 
     const payload = JSON.stringify(event);
@@ -394,6 +413,9 @@ export class WebhookDelivery {
     }
     const span = this.config.tracer?.startSpan("webhook.delivery", spanAttrs);
     const startMs = Date.now();
+    const pinnedDispatcher = resolvedHostname.address
+      ? this.createPinnedDispatcher(resolvedHostname.address)
+      : undefined;
 
     try {
       const res = await fetch(url, {
@@ -409,7 +431,8 @@ export class WebhookDelivery {
         },
         body: payload,
         signal: controller.signal,
-      });
+        ...(pinnedDispatcher ? { dispatcher: pinnedDispatcher } : {}),
+      } as RequestInit & { dispatcher?: Agent });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -441,6 +464,7 @@ export class WebhookDelivery {
       return { ok: false, error: errorMessage };
     } finally {
       clearTimeout(abortTimer);
+      await pinnedDispatcher?.close();
       span?.end();
     }
   }
@@ -523,8 +547,10 @@ export class WebhookDelivery {
       return "Invalid webhook URL";
     }
 
-    const hostname = this.normalizeHostname(parsedUrl.hostname);
-    if (hostname === "localhost") {
+    const hostname = normalizeHostname(parsedUrl.hostname);
+    // `.localhost` too, not just the bare label: RFC 6761 reserves the suffix
+    // and resolvers answer it with a loopback address.
+    if (isLoopbackHostname(hostname)) {
       return BLOCKED_ADDRESS_ERROR;
     }
 
@@ -535,43 +561,55 @@ export class WebhookDelivery {
     return null;
   }
 
-  private normalizeHostname(hostname: string): string {
-    return hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
-  }
-
+  /**
+   * Shared with `UrlValidator` - see `./private-ip.js` for why these are no
+   * longer two separate lists.
+   *
+   * URL normalisation converts mapped dotted forms such as `::ffff:10.0.0.1`
+   * to their canonical hexadecimal form `::ffff:a00:1`, which
+   * `isPrivateIpLiteral` decodes back before checking.
+   */
   private isBlockedIp(address: string): boolean {
-    const ipVersion = isIP(address);
-    if (ipVersion === 4) {
-      return BLOCKED_WEBHOOK_ADDRESSES.check(address, "ipv4");
-    }
-    if (ipVersion === 6) {
-      // URL normalisation converts mapped dotted forms such as
-      // ::ffff:10.0.0.1 to their canonical hexadecimal form ::ffff:a00:1.
-      return BLOCKED_WEBHOOK_ADDRESSES.check(address, "ipv6");
-    }
-
-    return false;
+    return isPrivateIpLiteral(address);
   }
 
-  private async validateResolvedHostname(url: string): Promise<string | null> {
-    const hostname = this.normalizeHostname(new URL(url).hostname);
-    if (isIP(hostname) !== 0) return null;
+  private async validateResolvedHostname(
+    url: string,
+  ): Promise<{ error: string | null; address?: ValidatedAddress }> {
+    const hostname = normalizeHostname(new URL(url).hostname);
+    if (isIpLiteral(hostname)) return { error: null };
 
     try {
       // Check every A and AAAA answer before each attempt. This prevents a
       // public answer from masking a private IPv6 answer and re-checks retries.
       const addresses = await lookup(hostname, { all: true, verbatim: true });
       if (addresses.length === 0) {
-        return "Webhook hostname did not resolve to an IP address";
+        return { error: "Webhook hostname did not resolve to an IP address" };
       }
 
-      return addresses.some(({ address }) => this.isBlockedIp(address))
-        ? BLOCKED_ADDRESS_ERROR
-        : null;
+      if (addresses.some(({ address }) => this.isBlockedIp(address))) {
+        return { error: BLOCKED_ADDRESS_ERROR };
+      }
+
+      const firstAddress = addresses[0]!;
+      return {
+        error: null,
+        address: { address: firstAddress.address, family: firstAddress.family as 4 | 6 },
+      };
     } catch {
       // DNS failures must fail closed; delivery can retry and resolve again.
-      return "Webhook hostname could not be resolved";
+      return { error: "Webhook hostname could not be resolved" };
     }
+  }
+
+  private createPinnedDispatcher(validatedAddress: ValidatedAddress): Agent {
+    return new Agent({
+      connect: {
+        lookup: (_hostname: string, _options: unknown, callback: LookupCallback) => {
+          callback(null, validatedAddress.address, validatedAddress.family);
+        },
+      },
+    });
   }
 
   private extractTraceId(event: NormalizedEvent): string | undefined {

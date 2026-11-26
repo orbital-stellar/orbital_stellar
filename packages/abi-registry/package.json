@@ -1,6 +1,6 @@
 {
   "name": "@orbital-stellar/abi-registry",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Canonical Soroban ABI client, schema helpers, and registry publisher interface for Orbital.",
   "license": "MIT",
   "engines": {
@@ -13,16 +13,20 @@
     "dist",
     "bin",
     "schema",
+    "schemas",
+    "test-vectors",
     "specs/well-known",
     "README.md",
     "LICENSE"
   ],
   "bin": {
-    "abi-registry-generate": "./bin/abi-registry-generate"
+    "abi-registry": "./bin/abi-registry",
+    "abi-registry-generate": "./bin/abi-registry-generate",
+    "orbital-codegen": "./bin/orbital-codegen"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/determined-001/orbital_stellar.git",
+    "url": "https://github.com/orbital-stellar/orbital_stellar.git",
     "directory": "packages/abi-registry"
   },
   "publishConfig": {
@@ -32,20 +36,23 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "INTEGRATION_TESTS=true vitest run test/integration",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "validate": "node validate.js",
-    "seed:well-known": "tsx scripts/seed-well-known.ts"
+    "seed:well-known": "tsx scripts/seed-well-known.ts",
+    "seed:community": "tsx scripts/seed-community.ts"
   },
   "dependencies": {
     "@stellar/js-xdr": "4.0.0",
-    "@stellar/stellar-sdk": "^16.0.1"
+    "@stellar/stellar-sdk": "^16.1.0",
+    "yargs": "^18.1.0"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "ajv": "^8.17.1",
-    "tsx": "^4.22.4",
-    "vitest": "^4.1.9",
-    "zod": "^4.4.3"
+    "tsx": "^4.23.13",
+    "vitest": "^5.0.0",
+    "zod": "^4.6.6"
   }
 }

@@ -1,0 +1,37 @@
+{
+  "name": "orbital-next-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Next.js App Router starter: live, typed Stellar events in the browser via React hooks, with the engine and cursor on the server.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "codegen": "node ../../packages/abi-registry/bin/orbital-codegen",
+    "codegen:check": "node ../../packages/abi-registry/bin/orbital-codegen --check",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@orbital-stellar/pulse-core": "^0.2.0",
+    "@orbital-stellar/pulse-notify": "^0.2.0",
+    "next": "^16.4.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitest/coverage-v8": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}

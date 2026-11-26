@@ -3,6 +3,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dnsLookupMock = vi.hoisted(() => vi.fn());
 vi.mock("dns/promises", () => ({ lookup: dnsLookupMock }));
+const agentInstances = vi.hoisted(
+  () => [] as Array<{ options: AgentOptionsMock; close: () => Promise<void> }>,
+);
+type AgentOptionsMock = {
+  connect?: {
+    lookup?: (
+      hostname: string,
+      options: unknown,
+      callback: (
+        err: Error | null,
+        address: string | Array<{ address: string; family: number }>,
+        family?: number,
+      ) => void,
+    ) => void;
+  };
+};
+vi.mock("undici", () => ({
+  Agent: class Agent {
+    readonly options: AgentOptionsMock;
+    readonly close = vi.fn().mockResolvedValue(undefined);
+
+    constructor(options: AgentOptionsMock) {
+      this.options = options;
+      agentInstances.push(this);
+    }
+  },
+}));
 
 import { Watcher } from "@orbital-stellar/pulse-core";
 import type { BackoffStrategy, RetryQueue, UrlEntry, WebhookMetrics } from "../src/index.js";
@@ -41,6 +68,7 @@ async function flushAsyncWork(): Promise<void> {
 beforeEach(() => {
   dnsLookupMock.mockReset();
   dnsLookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+  agentInstances.length = 0;
 });
 
 function signWebhookPayload(secret: string, payload: string, timestamp: string): string {
@@ -340,6 +368,50 @@ describe("pulse-webhooks WebhookDelivery", () => {
     expect(failedHandler).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * Regression: these all passed `validateUrl` and were fetched.
+   *
+   * The delivery guard was a `net.BlockList` that had drifted from
+   * `UrlValidator`'s range list, omitting `0.0.0.0/8`, the IPv6 unspecified
+   * address, CGNAT and `192.0.0.0/24`. Because each of these is an IP literal,
+   * `validateResolvedHostname` returned early and never re-checked them, so
+   * `http://0.0.0.0:8080/` reached a service bound to loopback on Linux.
+   *
+   * `.localhost` is here for the same reason: only the bare `localhost` label
+   * was matched, though RFC 6761 reserves the whole suffix for loopback.
+   */
+  it.each([
+    "http://0.0.0.0:8080/hook", // routes to loopback on Linux
+    "http://0.0.0.1/hook", // rest of 0.0.0.0/8
+    "https://[::]/hook", // IPv6 unspecified
+    "https://[::ffff:0.0.0.0]/hook", // mapped form of the same
+    "http://100.64.0.1/hook", // CGNAT
+    "http://192.0.0.1/hook", // IETF protocol assignments
+    "http://224.0.0.1/hook", // multicast
+    "http://sub.localhost/hook", // RFC 6761 reserved suffix
+  ])("blocks previously-bypassable destination %s", async (url) => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const watcher = new Watcher("GABC");
+    const failedHandler = vi.fn();
+    watcher.on("webhook.failed", failedHandler);
+
+    new WebhookDelivery(watcher, { url, secret: "top-secret" });
+    watcher.emit("*", deliveryEvent);
+    await flushAsyncWork();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(failedHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        raw: expect.objectContaining({
+          url,
+          error: "Webhook URL points to a blocked private address",
+        }),
+      }),
+    );
+  });
+
   it.each([
     "https://[fc00::1]/hook",
     "https://[fdff:ffff::1]/hook",
@@ -420,6 +492,49 @@ describe("pulse-webhooks WebhookDelivery", () => {
         }),
       }),
     );
+  });
+
+  it("pins hostname delivery to the address that passed DNS validation", async () => {
+    dnsLookupMock.mockResolvedValue([{ address: "203.0.113.10", family: 4 }]);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const url = "https://hooks.example.com/stellar";
+    const watcher = new Watcher("GABC");
+
+    new WebhookDelivery(watcher, { url, secret: "top-secret" });
+    watcher.emit("*", deliveryEvent);
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      url,
+      expect.objectContaining({
+        method: "POST",
+        redirect: "manual",
+        dispatcher: agentInstances[0],
+      }),
+    );
+
+    let pinnedResult: {
+      err: Error | null;
+      address: string | Array<{ address: string; family: number }>;
+      family?: number;
+    } | null = null;
+    agentInstances[0]?.options.connect?.lookup?.(
+      "hooks.example.com",
+      {},
+      (err, address, family) => {
+        pinnedResult = { err, address, family };
+      },
+    );
+
+    expect(pinnedResult).toEqual({
+      err: null,
+      address: "203.0.113.10",
+      family: 4,
+    });
+    expect(agentInstances[0]?.close).toHaveBeenCalledTimes(1);
   });
 
   it("re-checks DNS before a retry and blocks a rebound private address", async () => {
@@ -561,6 +676,52 @@ describe("pulse-webhooks WebhookDelivery", () => {
     expect(droppedHandler).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  /**
+   * Reads the in-memory retry map's size directly (13.1's `docs/ARCHITECTURE.md`
+   * bounded-queue guarantee is about that map, not `webhook.dropped` counts,
+   * which only prove eviction fired - not that the map itself never grew past
+   * the cap in between). `retryTimers` is private; there is no public accessor
+   * because the property under test *is* that internal size.
+   */
+  function retryMapSize(delivery: WebhookDelivery): number {
+    return (delivery as unknown as { retryTimers: Map<unknown, unknown> }).retryTimers.size;
+  }
+
+  it("holds the retry map at maxConcurrentRetries under a 10k-event burst (13.1)", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const watcher = new Watcher("GABC");
+    const droppedHandler = vi.fn();
+    watcher.on("webhook.dropped", droppedHandler);
+
+    const CAP = 50;
+    const BURST = 10_000;
+    const delivery = new WebhookDelivery(watcher, {
+      url: "https://example.com/hook",
+      secret: "top-secret",
+      retries: 3,
+      maxConcurrentRetries: CAP,
+    });
+
+    let peak = 0;
+    for (let i = 0; i < BURST; i++) {
+      watcher.emit("*", { ...deliveryEvent, raw: { id: `evt_${i}` } });
+      // Each first attempt's microtask chain (doAttempt -> mocked-reject ->
+      // deliverToUrl's retry branch) resolves in a handful of ticks - fewer
+      // than flushAsyncWork's 20 - so the map's size is observed right after
+      // every insertion/eviction pair, exactly where a leak would first show
+      // up, without paying flushAsyncWork's full cost 10k times over.
+      for (let tick = 0; tick < 6; tick++) await Promise.resolve();
+      peak = Math.max(peak, retryMapSize(delivery));
+    }
+    await flushAsyncWork();
+
+    expect(peak).toBeLessThanOrEqual(CAP);
+    expect(retryMapSize(delivery)).toBe(CAP);
+    expect(droppedHandler).toHaveBeenCalledTimes(BURST - CAP);
+  }, 45_000);
 
   it("cancels pending retries for all URLs when the watcher stops", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));

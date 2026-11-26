@@ -5,21 +5,169 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-This file rolls up changes across the public packages: `@orbital-stellar/pulse-core`,
-`@orbital-stellar/pulse-webhooks`, `@orbital-stellar/pulse-notify`, and `@orbital-stellar/abi-registry`.
-Per-package changelogs live in each package directory.
+This file rolls up changes across the seven published packages:
+`@orbital-stellar/pulse-core`, `@orbital-stellar/pulse-webhooks`,
+`@orbital-stellar/pulse-notify`, `@orbital-stellar/abi-registry`,
+`@orbital-stellar/orbital-indexer`, `@orbital-stellar/anchor-sdk` and
+`@orbital-stellar/worker-core`.
+Per-package changelogs live in each package directory (`orbital-indexer` and
+`anchor-sdk` do not have one yet; their README is linked instead).
+
+## [Unfrozen] — 2026-08-30 — Worker layer (Part C)
+
+**Unfreeze of the worker layer.** Per the procedure in
+[`ROADMAP.md`'s Frozen section](./ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven)
+(unfreezing a row requires the Phase 2 gate met, the Phase 3 gate met, and a
+maintainer-signed rationale recorded here — this is the written rationale, and
+this is the only issue in the majors 18–22 range that is intentionally not
+blocked), the **worker layer (Part C)** is unfrozen and moved onto the active
+roadmap as [Phase 4 — Workers entry gate](./ROADMAP.md#phase-4--workers-entry-gate).
+
+- **What is unfrozen:** the worker layer — an open standard plus a runtime that
+  lets off-chain workers *trigger* on-chain settlement and other Orbital events
+  **without taking custody** of the funds they move (the §C.2
+  trigger-≠-custodian constraint, quoted verbatim in Phase 4).
+- **Counterparty that motivated it:** [counterparty name to be supplied by
+  maintainer] — a named Stellar anchor / settlement desk. Gate 3 (the
+  counterparty-integration gate, `W3`) exists specifically because this
+  counterparty requires the trigger-without-custody primitive to automate
+  cross-anchor payouts without holding counterparty funds. "There is demand"
+  is explicitly *not* the rationale; a named team is.
+- **Staging (build order is a hard constraint — W4 lands last):**
+  - `W0` — Worker standard (MIT)
+  - `W1` — `worker-core` runtime (MIT)
+  - `W2` — external operators (MIT). *(Originally the vault contract; the
+    custodial branch was cut — see `docs/design/workers.md` §6.)*
+  - `W3` — counterparty integration gate (sign-off by named counterparty — name to be supplied by maintainer)
+  - `W4` — backstop (operated service, **lands last**)
+- **Not unfrozen:** payments SDK, auth/identity, x402, agent-sdk, intent
+  compiler, shadow-fork simulator, and analytics dashboards remain frozen per
+  the Frozen section.
+- **Gate durability:** the worker-layer gate is cross-linked to
+  [`ORBITAL_PRD.md` §C.9](./ORBITAL_PRD.md#c9) so it survives the PRD going
+  stale; its text is replicated in Phase 4 on purpose.
+
+**Proposed maintainer sign-off:** this entry constitutes the written rationale
+required by the unfreeze procedure. A maintainer must record their sign-off
+below before this entry is considered complete:
+
+> Maintainer sign-off: _[to be added by a maintainer]_
+
+---
 
 ## [Unreleased]
 
+`main` is ahead of the `0.2.0` npm release. Install from source to use these.
+
+### Breaking Changes
+
+- **`abi-registry`: attestation envelope version 1.** Attestations are now
+  signed over the SEP-53 digest of a domain-separated, RFC 8785 canonical
+  document and carry `v: 1`. Envelopes signed by `0.2.0` no longer verify
+  (`unsupported-version`) and must be re-signed. `verifyAttestation` now
+  enforces `expiresAt`. `worker-core` computation attestations move to their
+  own domain, `orbital-computation-attestation-v1`.
+
 ### Added
+
+- **`abi-registry`: attestation policy.** `resolveAttestations` ranks claims by
+  trust tier (`deployer` > `third-party` > `unbound`), follows `supersedes`
+  chains and flags conflicts. Ships with a JSON Schema for the envelope, a
+  language-neutral conformance suite and reference verifiers in Go and Rust.
+  The SEP draft's §5 specifies the envelope.
+- **`abi-registry`: mainnet-aware registry selection.**
+  `createDefaultAbiRegistryClient({ network })` picks the on-chain registry for
+  the network instead of always using testnet; the mainnet constants stay empty
+  until a mainnet deploy, and the mainnet link never falls back to testnet. See
+  [`docs/mainnet-deployment.md`](docs/mainnet-deployment.md).
+- **29 verified mainnet schemas** in `packages/abi-registry/specs/community/`
+  (Blend, Soroswap, Phoenix, Aquarius, Reflector, DeFindex, FxDAO, Comet,
+  Allbridge, KALE, Slender, Orbit and more), each with a `match` verdict that
+  CI re-verifies against mainnet WASM on every change, and a publish path for
+  contributed specs.
+- `abi-registry`: `PrimitiveType` gained `"val"`; the empty tuple maps to
+  `void`.
+
+Per-package detail: [`abi-registry`](./packages/abi-registry/CHANGELOG.md#unreleased).
+
+---
+
+## [0.2.0] - 2026-09-23
+
+All seven packages are published at `0.2.0`. `@orbital-stellar/orbital-indexer`,
+`@orbital-stellar/anchor-sdk` and `@orbital-stellar/worker-core` are on npm for
+the **first time** with this release; `pulse-core`, `pulse-webhooks`,
+`pulse-notify` and `abi-registry` move up from `0.1.0`.
+
+### Breaking Changes
+
+- **`pulse-core`: `CoreConfig.abiRegistry` now defaults to an active registry
+  client instead of `undefined`.** Omitting it resolves the bundled well-known
+  specs (and the on-chain registry once configured), so `decodedData` populates
+  with zero configuration and `contract.emitted` delivery is always
+  asynchronous. Pass `abiRegistry: false` to keep the `0.1.0` behaviour.
+- **`anchor-sdk`: `Sep10Client` now requires the anchor's identity.** It
+  verifies every SEP-10 challenge before handing it to the signer. This is
+  taken under the security exception in [`STABILITY.md`](./STABILITY.md); the
+  advisory and migration steps are in the [Security](#security) entry
+  below. Because `anchor-sdk` has no earlier npm
+  release, no published consumer is affected.
+
+### Per package
+
+- **[`@orbital-stellar/pulse-core`](./packages/pulse-core/CHANGELOG.md#020---2026-09-23)**
+  `decodedData` now carries the decoded event payload rather than the raw ABI
+  spec (a bug fix). New `orbital typegen <contractId>` CLI generates TypeScript
+  interfaces and Zod schemas for a deployed contract, resolving from the
+  on-chain registry first and falling back to WASM auto-discovery.
+- **[`@orbital-stellar/pulse-webhooks`](./packages/pulse-webhooks/CHANGELOG.md#020---2026-09-23)**
+  and **[`@orbital-stellar/pulse-notify`](./packages/pulse-notify/CHANGELOG.md#020---2026-09-23)**
+  No user-facing changes recorded beyond the changelog scaffold; versions are
+  aligned with the release.
+- **[`@orbital-stellar/abi-registry`](./packages/abi-registry/CHANGELOG.md#020---2026-09-23)**
+  The decoding standard takes shape: a normative semantic-taxonomy format with
+  `validateTaxonomyEntry()` and `findTaxonomyConflicts()`; an
+  `abi-registry verify` CLI with distinct exit codes per verdict; on-chain
+  registry support (`OnChainRegistryPublisher`, `OnChainAbiRegistryClient`);
+  WASM auto-discovery of a contract's embedded spec
+  (`discoverContractSpec()`); `createDefaultAbiRegistryClient()` composing the
+  bundled specs with the on-chain registry; and canonical `ContractSpec`
+  typegen. SEP-41 events were added to the bundled USDC, EURC, AQUA and native
+  asset specs.
+- **[`@orbital-stellar/orbital-indexer`](./packages/orbital-indexer/README.md)** *(first publish)*
+  `AutoPublishIndexer` watches an `EventEngine`'s contract stream for contracts
+  the registry has no spec for, discovers their interface from the WASM, and
+  publishes it to the on-chain registry, so the registry fills in as part of
+  normal operation. Manual `abi-registry publish` stays as the override.
+- **[`@orbital-stellar/anchor-sdk`](./packages/anchor-sdk/README.md)** *(first publish)*
+  Typed anchor clients for SEP-1 discovery, SEP-10 authentication, SEP-12 KYC,
+  SEP-24 interactive deposit/withdraw and SEP-31 cross-border payments, each
+  response validated against a schema. It never holds a secret key: every flow
+  that signs takes a caller-supplied callback.
+- **[`@orbital-stellar/worker-core`](./packages/worker-core/CHANGELOG.md#020---2026-09-23)** *(first publish)*
+  The worker runtime: `WorkerDefinition` with time, event and computation
+  triggers; interval and cron schedules with explicit time zones; an
+  event-trigger class with declarative predicates; a subscription model with
+  subscriber webhooks and an audit trail; backstop latency tiers, cost metering
+  and a subscription lifecycle; and price and slippage guard rails. The
+  latency-tier stub and the copy-trade worker and vault were removed unbuilt
+  (see [`docs/design/workers.md`](./docs/design/workers.md) section 6).
+
+
+### Added (repository)
 
 - `STABILITY.md` - strict semver on the public API of all `@orbital-stellar/*`
   packages, wire/data contracts covered (webhook headers, HMAC scheme, retry
   semantics, `NormalizedEvent` JSON shape, cursor format, registry schema
   format), a 6-month deprecation window, and a documented security exception.
   Closes the outstanding Wave 1.5 release-gate item.
+- [`docs/migration/0.1-to-1.0.md`](docs/migration/0.1-to-1.0.md) - procedural
+  before/after migration guide for the `0.1.0` → `1.0.0` bump (breaking
+  `abiRegistry` default, `decodedData` shape, Wave 8 registry configuration).
+  Narrative release notes remain in this file’s `[1.0.0]` entry when cut;
+  do not duplicate them into the guide.
 
-### Changed
+### Changed (repository)
 
 - **Roadmap refocused on the decoding standard.** Maintainer sign-off for
   scope removal per `ROADMAP.md`'s own contribution rules. The former Phase 2
@@ -31,10 +179,50 @@ Per-package changelogs live in each package directory.
   are frozen and moved to an explicit Frozen section in `ROADMAP.md` with
   per-item rationale and an unfreeze procedure. No shipped code is removed -
   planned scope only.
-
-### Fixed
+- Docs aligned with the refocused roadmap: README reframed around the
+  decoding standard; open-source-policy and proposal forward-references
+  updated; frozen-scope references removed from forward-looking docs.
 
 ### Security
+
+- **`@orbital-stellar/anchor-sdk` 0.1.0 does not validate SEP-10 challenges
+  before signing them.** `Sep10Client.authenticate()` passed the anchor's
+  challenge XDR straight to the caller-supplied `sign` callback with no checks:
+  no verification of the anchor's signature, no source-account or `sequence == 0`
+  check, no `<home_domain> auth` Manage Data check, no time bounds. The
+  `network_passphrase` in the response was parsed and then ignored, and
+  `SIGNING_KEY` — the one value that can attribute a challenge to an anchor —
+  was read from `stellar.toml` and never used.
+
+  A hostile or compromised anchor, or an on-path attacker against a plain-`http`
+  `WEB_AUTH_ENDPOINT`, could return an ordinary transaction (a payment, or a
+  `set_options` adding a signer) and have it blind-signed by the consumer's
+  wallet, hardware device, or KMS.
+
+  Fixed in **0.2.0**. `Sep10Client` now verifies every challenge with
+  `WebAuth.readChallengeTx` before `sign` is invoked, rejects a
+  `network_passphrase` that disagrees with the configured network, and refuses a
+  non-`https` endpoint at construction.
+
+  This is a **breaking change to a surface that was itself the vulnerability**,
+  taken under the security exception in [`STABILITY.md`](./STABILITY.md).
+  A GitHub Security Advisory is to be published per [`SECURITY.md`](./SECURITY.md).
+
+  **Migration.** `Sep10Client` now requires the anchor's identity. The smallest
+  change is to build it from the anchor's own `stellar.toml`:
+
+  ```ts
+  // before - no way to tell whose challenge you were signing
+  const client = new Sep10Client(toml.WEB_AUTH_ENDPOINT);
+
+  // after - SIGNING_KEY and NETWORK_PASSPHRASE come from the toml you already fetch
+  const toml = await discoverAnchor("anchor.example");
+  const client = Sep10Client.fromToml(toml, "anchor.example");
+  ```
+
+  Or pass them explicitly: `new Sep10Client(endpoint, { serverAccountId,
+  networkPassphrase, homeDomain, webAuthDomain })`. Anchors that publish no
+  `SIGNING_KEY` are now refused rather than trusted.
 
 ---
 

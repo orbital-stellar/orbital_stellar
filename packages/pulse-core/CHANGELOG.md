@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-23
+
 ### Breaking Changes
 - **`CoreConfig.abiRegistry` now defaults to an active registry client instead of `undefined`.** Previously, omitting `abiRegistry` meant no ABI lookup ever happened and `contract.emitted` events were dispatched synchronously. Now, omitting it resolves `@orbital-stellar/abi-registry`'s bundled well-known specs (USDC, EURC, AQUA, the native XLM wrapper) by default - and, once Orbital's on-chain registry contract is deployed, that too. This means:
   - `decodedData` now populates automatically for those well-known contracts with zero configuration.
@@ -13,7 +15,6 @@
 
 ### Added
 - `orbital typegen <contractId>` CLI command - generates TypeScript interfaces + Zod schemas for a deployed Soroban contract, resolving its spec from the on-chain registry first and falling back to live WASM auto-discovery.
-- **`ContractEmittedEvent.semantic`** - populated from `@orbital-stellar/abi-registry`'s new `TaxonomyResolver` once `decodedData` resolves successfully (contract exposes `decoded.functionName` as the resolver's `eventTopic`). New `CoreConfig.taxonomy` option, mirroring `abiRegistry`'s shape: an explicit resolver, `false` to opt out (`semantic` always `undefined`), or omit it to default to the bundled `wellKnownTaxonomy`. Resolution never throws and never blocks `decodedData`/dispatch - a failure is logged and swallowed. `semantic` is only ever set when a mapping actually resolves, never guessed.
 
 ## [0.1.0] - 2026-05-28
 

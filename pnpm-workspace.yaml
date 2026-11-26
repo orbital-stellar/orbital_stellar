@@ -1,17 +1,68 @@
 packages:
   - "packages/*"
   - "apps/*"
+  - "examples/*"
 allowBuilds:
   esbuild: false
 # pnpm v10 reads dependency overrides from here, NOT from package.json.
-# axios <1.16.0 has the Proxy-Authorization credential-leak advisories (GHSA-j5f8-grm9-p9fc et al.).
+# Adding a `pnpm.overrides` block to the root package.json silently disables
+# EVERY override below - keep them in this file only.
+#
+# axios <1.20.0 has the Proxy-Authorization credential-leak advisories
+# (GHSA-j5f8-grm9-p9fc et al.), the inherited-proxy, prototype-pollution and
+# form-serializer advisories, and the 1.19/1.20 batch (GHSA-c29m-xwm3-cm6r,
+# GHSA-mghh-pgcx-3jjj, GHSA-x97p-jq2g-jp4f, GHSA-3pq3-5fj3-cg6v,
+# GHSA-542g-h47m-68v8); reached via @stellar/stellar-sdk.
 # postcss <8.5.10 has the </style> XSS advisory (GHSA-qx2v-qp2m-jg93) - next pins 8.4.31.
-# js-yaml 3.x <3.15.0 has the merge-key DoS advisory (GHSA-h67p-54hq-rp68) via gray-matter;
-# scoped to @3 so a future js-yaml 4.x consumer is never downgraded.
+# js-yaml has the merge-key DoS advisory (GHSA-h67p-54hq-rp68), the quadratic
+# !!omap CPU advisory on both major lines, and on 3.x additionally
+# GHSA-2883-xcg3-v3hh (<3.15.2), so each is pinned to its own fixed version
+# rather than collapsing them: 3.x arrives via gray-matter, and 4.x <4.3.1 via
+# openapi-typescript > @redocly/openapi-core. Keeping the ranges major-scoped
+# means neither consumer is dragged across a major boundary.
+# undici <7.29.1 has the redirect/request-smuggling pair
+# (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3); reached via next.
+# sharp <0.35.5 inherits the libvips/libheif advisories (GHSA-g89c-p67h-r497,
+# GHSA-2jg2-4ch7-h545, GHSA-rgj7-g3m4-5g8c); reached via next's image optimizer.
+# nanoid <3.3.17 loops indefinitely on a non-integer size (GHSA-mwcw-c2x4-8c55);
+# reached via next > postcss.
+# fast-uri <3.1.6 has the host-confusion advisories (literal and backslash
+# variants), the skipped-IDN variant and the SSRF advisory
+# (GHSA-5jgf-p345-68v8, GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf,
+# GHSA-jqff-g426-hqxp); reached via ajv in abi-registry. Held on 3.x - ajv
+# expects that line, and 4.x is a major it does not accept.
+# qs <6.16.0 has the array-limit bypass and the attacker-controlled isBuffer DoS;
+# reached via express. Both are moderate, so neither trips the audit gate at
+# --audit-level=high, but the fix is same-major.
+# path-to-regexp 0.x has the backtracking-ReDoS advisory (GHSA-9wv6-86v2-598j);
+# scoped to @0 so express 5 - which requires 8.x - is not dragged back to a
+# version whose router API it cannot use.
+# proxy-addr <2.0.8 mishandles an IPv4-mapped IPv6 trust-proxy subnet, so a
+# spoofed client IP is trusted (critical advisory); reached via express in
+# examples/express-starter.
+# body-parser >=2.0.0 <2.4.0 (GHSA-27r3-jxmh-p828) - reached via express in
+# examples/express-starter.
+# follow-redirects >=1.16.0 <=1.16.1 (GHSA-mrwp-f3q8-3g9p) - reached via
+# @stellar/stellar-sdk > axios.
+# GHSA bumps from the 2026-10-23 audit, all reached transitively and all
+# same-major: source-map-js <1.2.2 (via postcss / @tailwindcss/node), and
+# brace-expansion 2.x <2.1.6 and 5.x <5.0.11 (via minimatch). Each major is scoped separately so
+# minimatch's two consumers stay on the line they require.
 overrides:
-  path-to-regexp: 0.1.13
-  vite: 7.3.6
-  axios: 1.17.0
+  "path-to-regexp@0": 0.1.13
+  vite: 7.3.7
+  axios: ^1.20.0
   postcss: ^8.5.16
-  "js-yaml@3": ^3.15.0
-  undici: ^7.28.0
+  "js-yaml@3": ^3.15.2
+  "js-yaml@4": ^4.3.2
+  fast-uri: ^3.1.6
+  qs: ^6.16.0
+  nanoid: ^3.3.17
+  sharp: ^0.35.5
+  undici: ^7.29.1
+  proxy-addr: ^2.0.8
+  "body-parser": ^2.4.0
+  follow-redirects: ^1.16.2
+  source-map-js: ^1.2.2
+  "brace-expansion@2": ^2.1.6
+  "brace-expansion@5": ^5.0.11

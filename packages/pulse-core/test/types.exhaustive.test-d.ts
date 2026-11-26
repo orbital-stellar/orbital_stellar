@@ -50,8 +50,26 @@ export function assertExhaustive(event: NormalizedEvent): string {
     case "claimable.claimed":
     case "lp.deposited":
     case "lp.withdrawn":
+    case "asset.clawback":
+    case "fee.incurred":
     case "contract.invoked":
     case "contract.emitted":
+    case "anchor.transaction_status_changed":
+    case "anchor.deposit.initiated":
+    case "anchor.deposit.pending":
+    case "anchor.deposit.completed":
+    case "anchor.deposit.refunded":
+    case "anchor.deposit.failed":
+    case "anchor.withdrawal.initiated":
+    case "anchor.withdrawal.pending":
+    case "anchor.withdrawal.completed":
+    case "anchor.withdrawal.refunded":
+    case "anchor.withdrawal.failed":
+    case "anchor.payment.initiated":
+    case "anchor.payment.pending":
+    case "anchor.payment.completed":
+    case "anchor.payment.refunded":
+    case "anchor.payment.failed":
       return event.type;
     default: {
       const _exhaustive: never = event;
@@ -110,8 +128,26 @@ export function assertExhaustiveNoDefault(event: NormalizedEvent): string {
     case "claimable.claimed":
     case "lp.deposited":
     case "lp.withdrawn":
+    case "asset.clawback":
+    case "fee.incurred":
     case "contract.invoked":
     case "contract.emitted":
+    case "anchor.transaction_status_changed":
+    case "anchor.deposit.initiated":
+    case "anchor.deposit.pending":
+    case "anchor.deposit.completed":
+    case "anchor.deposit.refunded":
+    case "anchor.deposit.failed":
+    case "anchor.withdrawal.initiated":
+    case "anchor.withdrawal.pending":
+    case "anchor.withdrawal.completed":
+    case "anchor.withdrawal.refunded":
+    case "anchor.withdrawal.failed":
+    case "anchor.payment.initiated":
+    case "anchor.payment.pending":
+    case "anchor.payment.completed":
+    case "anchor.payment.refunded":
+    case "anchor.payment.failed":
       return event.type;
   }
 }
@@ -205,3 +241,46 @@ export function testWatcherOnInference() {
     >;
   });
 }
+
+/**
+ * The classic (Horizon-sourced) half of the taxonomy carries the same
+ * transaction-identity fields the Soroban half already did. They are optional
+ * on every event - a transport that cannot supply them still produces a valid
+ * event - so reading one must narrow to `... | undefined`, and assigning a
+ * required field's type to it must not compile.
+ */
+export function assertClassicIdentityIsOptional(event: NormalizedEvent): void {
+  if (event.type === "payment.received") {
+    type _TxHash = Assert<Equal<typeof event.txHash, string | undefined>>;
+    type _Ledger = Assert<Equal<typeof event.ledger, number | undefined>>;
+    type _Memo = Assert<Equal<typeof event.memo, string | undefined>>;
+  }
+
+  if (event.type === "account.merged") {
+    type _TxHash = Assert<Equal<typeof event.txHash, string | undefined>>;
+    type _Ledger = Assert<Equal<typeof event.ledger, number | undefined>>;
+    type _Memo = Assert<Equal<typeof event.memo, string | undefined>>;
+  }
+
+  if (event.type === "lp.deposited") {
+    type _TxHash = Assert<Equal<typeof event.txHash, string | undefined>>;
+  }
+}
+
+/** An event built without the identity fields still satisfies the type - they are additive. */
+export const _paymentWithoutIdentity: Omit<PaymentEvent, "timestampDate"> = {
+  type: "payment.received",
+  to: "GDEST" as PaymentEvent["to"],
+  from: "GSRC" as PaymentEvent["from"],
+  amount: "10" as PaymentEvent["amount"],
+  asset: "XLM",
+  timestamp: "2026-01-01T00:00:00Z",
+};
+
+/** ...and one built with them satisfies it too. */
+export const _paymentWithIdentity: Omit<PaymentEvent, "timestampDate"> = {
+  ..._paymentWithoutIdentity,
+  txHash: "abc",
+  ledger: 42,
+  memo: "invoice-1",
+};

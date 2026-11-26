@@ -45,6 +45,7 @@ Everything below is in `packages/` or `apps/` today, or will be added to one of 
 - `@orbital-stellar/pulse-webhooks` - `WebhookDelivery`, `verifyWebhook`, `verifyWebhookEdge`, durable retry queues (`RetryQueue` interface + memory/Redis/SQS adapters)
 - `@orbital-stellar/pulse-notify` - `useStellarEvent`, `useContractEvent`, `useStellarPayment`, `useStellarActivity`, `useStellarAddresses`, `useStellarHistory`
 - `@orbital-stellar/abi-registry` - ABI Registry client library, schema, and `RegistryPublisher` interface
+- `@orbital-stellar/worker-core` - the worker definition model, trigger evaluation, fire-once idempotency, retry/dead-letter, and the backstop subscription lifecycle with its `BillingHooks` interface (see [the backstop subscriptions boundary](#backstop-subscriptions) below)
 - Event schemas - the `NormalizedEvent` discriminated union and per-event TypeScript shapes, including `contract.invoked` / `contract.emitted`
 - Webhook delivery contract - header format, signing scheme, retry rules
 - Reference composition - the Next.js route handlers in `apps/web/app/api/*` that wire the packages together end-to-end
@@ -56,8 +57,9 @@ Everything below is in `packages/` or `apps/` today, or will be added to one of 
 ### Remaining Phase 1 work
 
 - Starter boilerplates (`orbital-next-starter`, `orbital-express-starter`, `orbital-anchor-starter`)
-- `v1.0` stability pledge (`STABILITY.md` - semver contract, deprecation window)
-- ABI Registry schema published as a draft SEP; hosted registry service (see [ABI Registry](#abi-registry) below)
+- `v1.0.0` git tag with full release notes
+
+`v1.0` stability pledge (`STABILITY.md`) has shipped - see [`STABILITY.md`](../STABILITY.md). The ABI Registry schema SEP draft and hosted registry service moved to Phase 2 (below) as of the roadmap refocus - see [ROADMAP.md](../ROADMAP.md).
 
 ### ABI Registry
 
@@ -68,23 +70,72 @@ Everything below is in `packages/` or `apps/` today, or will be added to one of 
 
 The hosted verification / publishing service remains a separate Cloud product. The schema, client, and decoder helpers in this repository stay open.
 
-### Phase 2 (2027)
+### Phase 2 - The Decoding Standard (2026 H2)
 
-- `@orbital-stellar/hooks` - `useAccount`, `useBalance`, `useTransaction`, `useOrderBook`
-- `@orbital-stellar/payments` - send, receive, path-payment, payroll-batch primitives
-- `@orbital-stellar/auth` - WebAuthn / passkey embedded wallet SDK
-- `@orbital-stellar/analytics` - client library + event-volume reference dashboards
-- First SEP submission - formalized event normalization format
-- Reference reactor contracts (Soroban Rust, open for anyone to fork)
+- SEP draft - standardized Soroban event schema + registry verification spec, submitted to `stellar/stellar-protocol`
+- `orbital codegen` - CLI + `orbital.config.ts` manifest that emits TypeScript types, typed event guards, and `useContractEvent<T>` hooks from the registry schema
+- Semantic layer - event taxonomy (`swap.executed`, `loan.liquidated`, …) and entity labels, published as **open data**; the hosted read API that serves them is the operated product (see [Hosted ABI Registry](#what-orbital-monetizes-never-open-sourced) below)
 
-### Phase 3 (2028+)
+### Phase 3 - Anchor Events (2027 H1)
 
-- `@orbital-stellar/x402` - Express / Next.js middleware for payment-gated API access
-- `@orbital-stellar/agent-sdk` - payment client for autonomous AI agents
-- `@orbital-stellar/anchor-sdk` - SEP-24 / SEP-31 lifecycle client
-- Intent compiler - at maturity, the DSL + graph runtime become OSS
-- Shadow-fork simulator OSS core
-- ZK-proof generation library (Noir / RiscZero circuits) - runnable locally
+- `@orbital-stellar/anchor-sdk` - typed client for SEP-24 / SEP-31 lifecycle events
+
+### Worker layer (Phase 4 — unfrozen)
+
+The worker layer (Part C) was unfrozen in writing by issue #1036 / the dated
+2026-08-30 [`CHANGELOG.md`](../CHANGELOG.md) entry and is tracked in
+[ROADMAP.md's Phase 4](../ROADMAP.md#phase-4--workers-entry-gate). It is split
+down the same open-code / operated-service line as the rest of Orbital:
+
+**MIT (open, in this repository):**
+
+- `worker-core` — the `@orbital-stellar/worker-core` runtime package: the
+  open-source standard, types, and execution surface that lets off-chain
+  workers *trigger* on-chain settlement and other Orbital events.
+- **The standard** — the event-worker spec, trigger/attestation envelope, and
+  reference types. Published as open data / open spec, the canonical surface
+  other tools emit against (mirrors the ABI Registry's open-standard model).
+- **The reference contracts** — `contracts/payroll` and `contracts/registry`.
+  Payroll is the canonical demonstration that a worker needs no authority at
+  all: `disburse()` takes no caller authorization, so a worker, the owner and a
+  stranger produce identical results. There is deliberately **no contract in
+  this repository with custodial authority** — the vault branch was cut, see
+  [`design/workers.md` §6](./design/workers.md#the-vault-pattern-was-cut).
+
+**Operated service (closed, separate Cloud repository — never folded back):**
+
+- **Backstop** — the Orbital-operated containment service that limits blast
+  radius if a worker faults. Operated at scale; not open-sourced.
+- **Hosted verification** — the Orbital-operated verification service that
+  attests worker proofs/envelopes (the worker *standard* and *client* are MIT;
+  only the hosted verification service is closed, exactly like the Hosted ABI
+  Registry model above).
+
+Per [`ROADMAP.md` Phase 4](../ROADMAP.md#phase-4--workers-entry-gate), the build
+order is a hard constraint: the backstop (`W4`) lands last, only after the
+no-custody property is demonstrated across `W0`–`W3`.
+
+### Frozen - not scheduled while Phases 1–3 are open
+
+These were previously listed as future MIT packages. They remain MIT-eligible in principle (the rule of thumb below still applies if they are ever unfrozen), but they are not on the active roadmap - see [ROADMAP.md's Frozen section](../ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven) for the rationale and the unfreeze procedure.
+
+**Carve-out:** the **worker layer (Part C)** is **not** in this Frozen list. It
+was unfrozen in writing (issue #1036 / the 2026-08-30 [`CHANGELOG.md`](../CHANGELOG.md)
+entry) and is now tracked in [ROADMAP.md's Phase 4](../ROADMAP.md#phase-4--workers-entry-gate).
+Payments SDK, auth/identity, x402, agent-sdk, intent compiler, shadow-fork
+simulator, and analytics dashboards stay frozen.
+
+- `@orbital-stellar/payments` - send, receive, path-payment, payroll-batch primitives *(frozen - see ROADMAP.md)*
+- `@orbital-stellar/auth` - WebAuthn / passkey embedded wallet SDK *(frozen - see ROADMAP.md)*
+- `@orbital-stellar/analytics` - client library + event-volume reference dashboards *(frozen - see ROADMAP.md)*
+- `@orbital-stellar/x402` - Express / Next.js middleware for payment-gated API access *(frozen - see ROADMAP.md)*
+- `@orbital-stellar/agent-sdk` - payment client for autonomous AI agents *(frozen - see ROADMAP.md)*
+- Identity layer - passkey-based embedded wallets, federated Stellar addresses *(frozen - see ROADMAP.md)*
+- Intent compiler - DSL + graph runtime *(frozen - see ROADMAP.md)*
+- Shadow-fork simulator *(frozen - see ROADMAP.md)*
+- Reference reactor contracts (Soroban Rust) *(frozen - see ROADMAP.md)*
+
+Two items from the prior list are not addressed by the current roadmap at all (neither active nor frozen) - `@orbital-stellar/hooks` (`useAccount`, `useBalance`, `useTransaction`, `useOrderBook`) and the ZK-proof generation library (Noir / RiscZero circuits). They are paused pending a future roadmap decision.
 
 **Rule of thumb for what lands here:** if a competent engineer would expect to `pnpm add` it and use it in a private project, it's MIT.
 
@@ -124,8 +175,26 @@ Examples of the boundary:
 | `WebhookDelivery.retryQueue` | Managed Redis / Postgres queue with manual replay UI |
 | `WebhookDelivery` event handlers (`webhook.failed`, `webhook.dropped`) | Hosted dead-letter explorer and forensics console |
 | `EventEngine.subscribe(address, { filter })` | Hosted address-and-event-type RBAC scopes |
+| `BillingHooks`, `SubscriptionState`, `CoverageWindow`, `CoverageLedger` in `worker-core` | The backstop billing implementation - payment processor, invoicing, dunning |
 
 This split lets us ship enterprise features without forking `pulse-core`, and lets self-hosters keep parity with Cloud for the parts that matter (correctness, security, performance).
+
+### Backstop subscriptions
+
+The backstop subscription lifecycle (issue 21.6) is the newest place this line is drawn, and it is drawn the same way as for the hosted registry.
+
+The [Worker layer](#worker-layer-phase-4--unfrozen) section above puts the **backstop service itself** on the operated side, and that does not change here: what Orbital sells is running the containment service. What is MIT is the *subscription vocabulary* the service and a self-hoster both speak - the states, the coverage record, and the hook interface - so that a self-hosted backstop is a complete product rather than a demo with the interesting parts removed.
+
+**MIT, in `@orbital-stellar/worker-core`:** the lifecycle state machine (`BackstopSubscription`, `LEGAL_TRANSITIONS`), the append-only coverage record (`CoverageLedger`, `CoverageWindow`, `InMemoryCoverageLedger`, `wasCovered`, `coverageForWindow`), and the billing **hook interface** (`BillingHooks`) with a working no-op default. A self-hoster gets a complete, unbilled backstop out of the box.
+
+**Closed, in the operated service:** the billing adapter that implements `BillingHooks` - the payment processor integration, invoicing, dunning, and the customer mapping - alongside the operated backstop service itself.
+
+Two consequences are deliberate:
+
+- **No vendor SDK is a dependency of `worker-core`.** The hooks are five async methods; the adapter lives on the other side of them.
+- **No payment credentials pass through `worker-core`.** The hook events carry a subscription id, a tier, a ledger and a coverage window - there is nowhere in the types to put a card token, a customer secret or an API key, and `packages/worker-core/test/types.exhaustive.test-d.ts` fails the build if a credential-shaped field is ever added. The adapter resolves its own customer mapping on its own side.
+
+Design record: [`docs/design/backstop-subscription-lifecycle.md`](./design/backstop-subscription-lifecycle.md).
 
 ---
 
@@ -153,11 +222,20 @@ A short decision aid before you open a PR.
 - Hosted dashboards beyond the marketing-demo sandbox
 - Anything that would require Orbital to operate infrastructure on the contributor's behalf
 
-### Uncertain - please discuss in an issue first
+### Frozen - not accepted while Phases 1–3 are open
 
-- Intent DSL / graph compiler interfaces (Phase 3; the **runtime** is OSS at maturity, the **hosted compilation service** is not)
-- Shadow-fork simulator extensions (Phase 3; OSS core, hosted SaaS version closed)
-- Reactor contract reference library (Phase 2; reference contracts are OSS, the certification / accreditation service is closed)
+- Intent DSL / graph compiler interfaces
+- Shadow-fork simulator extensions
+- Reactor contract reference library
+- `@orbital-stellar/payments`, `@orbital-stellar/auth`, identity layer, `@orbital-stellar/x402`, `@orbital-stellar/agent-sdk`, `@orbital-stellar/analytics`
+
+**Carve-out:** the **worker layer (Part C)** is *not* frozen — it was unfrozen
+in writing (issue #1036 / the 2026-08-30 [`CHANGELOG.md`](../CHANGELOG.md)
+entry) and lives in [ROADMAP.md's Phase 4](../ROADMAP.md#phase-4--workers-entry-gate).
+PRs against the worker layer are reviewed per that phase's gates, not closed as
+frozen.
+
+These are frozen per [ROADMAP.md](../ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven), not merely deprioritized - PRs against them will be closed with a pointer to that section rather than reviewed.
 
 If you are not sure where a PR falls, open an issue with the `policy-question` label before investing time. We will tell you in 48 hours.
 
@@ -180,9 +258,30 @@ These are honest uncertainties as of `v0.1.0`. They will be resolved in writing 
 
 | Question | Status |
 |---|---|
-| Will the Soroban ABI Registry **data** (the published contract schemas) be a public good or a paid dataset? | The **client** and **schema** are MIT. The **hosted service** is currently planned as a free public good, with a paid tier for high-volume integrators. Final structure TBD by Phase 1 close. |
-| Will the intent compiler ship as runnable-locally OSS at maturity (Phase 3)? | Current intent is yes - see [`ROADMAP.md`](../ROADMAP.md) Phase 3. Subject to scope decomposition closer to Phase 2 close. |
-| Will the reactor-contract certification service be Orbital-operated or community-governed? | TBD. The contracts themselves are MIT; the certification service may be operated commercially or via an Orbital Foundation. |
+| Will the Soroban ABI Registry **data** (schemas, taxonomy, labels) be a public good or a paid dataset? | The **data** (event taxonomy and entity labels) is published as **open data** under Creative Commons Zero (CC0 1.0) on every release, fetchable over plain HTTP (`/data/taxonomy.json`, `/data/labels.json`) with no JS SDK dependency. The **client** and **schema** are MIT. The **hosted read API** is currently planned as a free-tier public good, with a paid tier for high-volume integrators. Final structure TBD by Phase 2 close. |
+
+### Verifying the open data (integrity manifest)
+
+The repository publishes an integrity manifest at `data/integrity.json` (mirrored to `apps/web/public/data/integrity.json`) alongside `taxonomy.json`, `labels.json`, and `LICENSE`. The manifest records, for each published file:
+
+- a **SHA-256 digest** of the file's exact bytes,
+- its **byte length**, and
+- for `taxonomy.json` and `labels.json`, the **record count**.
+
+**What it guarantees.** The digest is computed over the exact committed bytes of each file, so a third party can confirm that the artifact they downloaded is byte-for-byte identical to what Orbital published. It does **not** assert anything about the *content* of the records (schema conformance is validated separately in CI); it is a claim of *integrity and provenance*, not of correctness.
+
+**How a third party verifies it.**
+
+1. Download the artifact and its manifest (e.g. `curl -O https://<host>/data/taxonomy.json` and `curl -O https://<host>/data/integrity.json`).
+2. Compute the digest over the exact downloaded bytes:
+   `shasum -a 256 taxonomy.json` (or `Get-FileHash` on Windows).
+3. Compare with the `files.taxonomy.json.sha256` value in the manifest. A match means the file is exactly what Orbital published; a mismatch means the file was altered in transit or on disk.
+4. Repeat for `labels.json` and `LICENSE`. Optionally compare `recordCount` with the parsed record array length as a sanity check.
+
+**How the manifest stays honest.** The open data is machine-generated from a single source (`scripts/generate-open-data.mjs`) into both `data/` and `apps/web/public/data/` in the same step. CI regenerates it on every relevant change and **fails if the committed output differs** from the generator's output (`validate-data.yml`), so the published hashes always describe what the repository actually contains — drift is prevented, not merely discouraged.
+
+| Will the intent compiler ship as runnable-locally OSS at maturity? | Frozen - not scheduled. See [ROADMAP.md's Frozen section](../ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven). Revisit only if unfrozen per that section's procedure. |
+| Will the reactor-contract certification service be Orbital-operated or community-governed? | Frozen - not scheduled. See [ROADMAP.md's Frozen section](../ROADMAP.md#frozen--out-of-scope-until-the-core-thesis-is-proven). |
 
 When these resolve, the row will be moved to §2 or §3 as appropriate.
 

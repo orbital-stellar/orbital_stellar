@@ -5,13 +5,53 @@ use soroban_sdk::{
     String, Vec,
 };
 
-// Persistent storage entries are bumped on every touch so a spec never
-// silently archives out from under a live registry. ~30 days of ledgers
-// at Stellar's ~5s close time, refreshed once the entry is within a day
-// of expiring.
+// ~5s ledger close time, so 17_280 ledgers is about a day.
 const DAY_IN_LEDGERS: u32 = 17_280;
-const BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
-const LIFETIME_THRESHOLD: u32 = BUMP_AMOUNT - DAY_IN_LEDGERS;
+
+/// The network's `max_entry_ttl` state-archival setting, in ledgers: the
+/// longest live-until window a single `extend_ttl` may ask for. Asking for
+/// more than the network allows makes the host reject the extension, so this
+/// must never exceed the live value.
+///
+/// 3_110_400 ledgers is ~180 days at a 5s close time. Verified against both
+/// networks on 2026-08-31 by reading the `STATE_ARCHIVAL` config setting
+/// (`ConfigSettingId` 10) over Soroban RPC:
+///
+/// ```text
+/// curl -s -X POST https://soroban-testnet.stellar.org \
+///   -H 'Content-Type: application/json' \
+///   -d '{"jsonrpc":"2.0","id":1,"method":"getLedgerEntries",
+///        "params":{"keys":["AAAACAAAAAo="]}}'
+/// # testnet max_entry_ttl = 3_110_400, pubnet max_entry_ttl = 3_110_400
+/// ```
+///
+/// Re-check this before raising it; the setting is a validator-votable
+/// network parameter, not a protocol constant.
+const MAX_ENTRY_TTL: u32 = 3_110_400;
+
+/// Every write extends the entries it touches to the network maximum rather
+/// than the old ~30-day window. A spec published once and never republished
+/// used to archive about a month later, which made the registry's canonical
+/// record evaporate monthly and pushed the `RestoreFootprint` cost onto a
+/// downstream consumer who did nothing wrong. Read paths deliberately do not
+/// extend anything (see `latest`), so `touch` is the supported way to keep an
+/// entry alive past this window.
+const BUMP_AMOUNT: u32 = MAX_ENTRY_TTL;
+
+/// Re-extend once an entry is within 30 days of expiring. Below the bump
+/// itself so a `touch` that runs early is a cheap no-op rather than paying
+/// rent on every call.
+const LIFETIME_THRESHOLD: u32 = BUMP_AMOUNT - 30 * DAY_IN_LEDGERS;
+
+/// Maximum number of versions returned by a single `list_versions_paged`
+/// call. Keeps Soroban resource costs bounded. Clients must page through
+/// results using the returned cursor.
+pub const MAX_PAGE_SIZE: u32 = 25;
+
+/// Appended as the final entry by the unpaged `list_versions` accessor when
+/// the full set exceeded `MAX_PAGE_SIZE`, so callers can detect clipping
+/// instead of silently receiving a short list.
+pub const TRUNCATION_MARKER: &str = "__truncated__";
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -22,6 +62,24 @@ pub enum Error {
     AlreadyPublished = 1,
     EmptyVersion = 2,
     EmptyPointer = 3,
+    /// The requested start cursor exceeds the total number of versions.
+    StartPastEnd = 4,
+    /// The requested page limit exceeds MAX_PAGE_SIZE.
+    LimitExceedsMax = 5,
+    /// `touch` was handed more versions than `MAX_PAGE_SIZE`, which would
+    /// make its footprint unbounded.
+    TooManyVersions = 6,
+    /// `touch` found no live entry for the given (contract_id, publisher):
+    /// nothing was ever published under it, or every entry has already been
+    /// archived and needs a `RestoreFootprint` before it can be extended.
+    NothingToTouch = 7,
+    /// `register_operator` was given an empty `display_name`. An operator
+    /// with no name is not discoverable, which defeats the directory.
+    EmptyDisplayName = 8,
+    /// `register_offering` was given an empty `trigger_class`.
+    EmptyTriggerClass = 9,
+    /// `register_offering` was given an unusable `target_contract`.
+    EmptyTargetContract = 10,
 }
 
 #[contracttype]
@@ -40,10 +98,48 @@ pub struct SpecRecord {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperatorRecord {
+    pub version: String,
+    pub operator: Address,
+    pub display_name: String,
+    pub contact: String,
+    pub trigger_classes: Vec<String>,
+    pub networks: Vec<String>,
+    pub price: i128,
+    pub denomination: String,
+    pub latency_tier: String,
+    pub pointer: String,
+    pub registered_at: u64,
+    pub registered_at_ledger: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OfferingRecord {
+    pub version: String,
+    pub operator: Address,
+    pub target_contract: Address,
+    pub function: String,
+    pub trigger_class: String,
+    pub price: i128,
+    pub denomination: String,
+    pub pointer: String,
+    pub registered_at: u64,
+    pub registered_at_ledger: u32,
+}
+
+#[contracttype]
 enum DataKey {
     Spec(Address, Address, String),
     Versions(Address, Address),
     Latest(Address, Address),
+    Operator(Address, String),
+    OperatorVersions(Address),
+    OperatorLatest(Address),
+    Offering(Address, String),
+    OfferingVersions(Address),
+    OfferingLatest(Address),
 }
 
 /// Emitted whenever a spec is successfully published. Deliberately declared
@@ -60,6 +156,36 @@ pub struct SpecPublished {
     pub spec_hash: BytesN<32>,
     pub pointer: String,
     pub publisher: Address,
+}
+
+/// Emitted whenever a worker offering is registered (or re-registered under
+/// a new version) for an operator. Uses `#[contractevent]` so it is
+/// discoverable via the same WASM-introspection / decode pipeline as
+/// `SpecPublished` and decodable via `decodeContractEvent`.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WorkerRegistered {
+    #[topic]
+    pub operator: Address,
+    #[topic]
+    pub version: String,
+    pub target_contract: Address,
+    pub trigger_class: String,
+    pub price: i128,
+    pub pointer: String,
+}
+
+/// Emitted whenever an operator record is registered or updated to a new
+/// version.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct OperatorRegistered {
+    #[topic]
+    pub operator: Address,
+    #[topic]
+    pub version: String,
+    pub display_name: String,
+    pub pointer: String,
 }
 
 #[contract]
@@ -138,6 +264,14 @@ impl AbiRegistry {
 
     /// Returns the most recently published spec for (contract_id, publisher),
     /// or `None` if that publisher has never published a spec for it.
+    ///
+    /// Deliberately does NOT extend the TTL of the entries it reads. Every
+    /// resolver in this repo reads the registry through `simulateTransaction`
+    /// with an unfunded throwaway source (see
+    /// `packages/abi-registry/src/OnChainAbiRegistryClient.ts`); a read that
+    /// wrote would turn spec resolution into a fee-paying, signed transaction
+    /// for every consumer. Durability comes from the write path bumping to
+    /// `MAX_ENTRY_TTL` and from `touch` being run on a schedule instead.
     pub fn latest(env: Env, contract_id: Address, publisher: Address) -> Option<SpecRecord> {
         let latest_key = DataKey::Latest(contract_id.clone(), publisher.clone());
         let version: String = env.storage().persistent().get(&latest_key)?;
@@ -146,6 +280,12 @@ impl AbiRegistry {
 
     /// Returns a specific published version's record, or `None` if it was
     /// never published.
+    ///
+    /// `None` means "never published". An entry that was published and has
+    /// since been archived does not reach this function at all - the host
+    /// rejects the invocation before it runs and the RPC answers with a
+    /// restore preamble, which is what lets clients tell the two apart.
+    /// Read-only for the same reason as `latest`.
     pub fn get_version(
         env: Env,
         contract_id: Address,
@@ -156,14 +296,420 @@ impl AbiRegistry {
         env.storage().persistent().get(&spec_key)
     }
 
-    /// Returns every version published for (contract_id, publisher), oldest
-    /// first, or an empty vector if none have been published.
-    pub fn list_versions(env: Env, contract_id: Address, publisher: Address) -> Vec<String> {
-        let versions_key = DataKey::Versions(contract_id, publisher);
+/// Returns every version published for (contract_id, publisher), oldest
+/// first, or an empty vector if none have been published.
+///
+/// NOTE: This accessor is unbounded and may exceed Soroban resource budgets
+/// for contracts with many versions. New callers should prefer
+/// `list_versions_paged`. This function will be deprecated in a future
+/// release.
+pub fn list_versions(env: Env, contract_id: Address, publisher: Address) -> Vec<String> {
+    let versions_key = DataKey::Versions(contract_id.clone(), publisher.clone());
+    let all: Vec<String> = env
+        .storage()
+        .persistent()
+        .get(&versions_key)
+        .unwrap_or_else(|| Vec::new(&env));
+
+    // Cap at MAX_PAGE_SIZE and emit a warning marker via truncation.
+    // The last entry is replaced with a sentinel when truncated so callers
+    // know the list was clipped.
+    let max = MAX_PAGE_SIZE;
+    if all.len() > max {
+        // `slice` takes a range and already returns a Vec; soroban_sdk::Vec
+        // does not implement FromIterator, so no collect() here.
+        let mut capped: Vec<String> = all.slice(0..max);
+        // The contract is #![no_std] with no alloc, so the marker cannot
+        // interpolate the total. Callers needing the count use
+        // `list_versions_paged`, whose cursor walks the full set.
+        capped.push_back(String::from_str(&env, TRUNCATION_MARKER));
+        capped
+    } else {
+        all
+    }
+}
+
+/// Returns a paged slice of versions for (contract_id, publisher), oldest
+/// first, plus an optional cursor for the next page.
+///
+/// - `start`: zero-based index into the full version list to begin from.
+/// - `limit`: maximum number of versions to return (capped internally at
+///   `MAX_PAGE_SIZE`).
+///
+/// Returns `(versions, Option<next_start>)` where `next_start` is `Some`
+/// with the start index for the next page if there are more results, or
+/// `None` if this was the last page.
+///
+/// Resource cost of a full-page read is documented in the test snapshot.
+pub fn list_versions_paged(
+    env: Env,
+    contract_id: Address,
+    publisher: Address,
+    start: u32,
+    limit: u32,
+) -> (Vec<String>, Option<u32>) {
+    let versions_key = DataKey::Versions(contract_id, publisher);
+    let all: Vec<String> = env
+        .storage()
+        .persistent()
+        .get(&versions_key)
+        .unwrap_or_else(|| Vec::new(&env));
+
+    let total = all.len();
+    if start >= total {
+        return (Vec::new(&env), None);
+    }
+
+    let effective_limit = limit.min(MAX_PAGE_SIZE);
+    let end = (start + effective_limit).min(total);
+    let page: Vec<String> = all.slice(start..end);
+    let next_cursor = if end < total { Some(end) } else { None };
+
+    (page, next_cursor)
+}
+
+/// Keeper entrypoint: extends the TTL of the entries backing
+/// (contract_id, publisher) back out to `MAX_ENTRY_TTL`.
+///
+/// Reads are pure by design, so this is the path that keeps a spec alive
+/// after publication. It is permissionless - TTL extension only ever adds
+/// life to an entry, so anyone willing to pay the rent may call it, which
+/// means a keeper needs a funded key but no privileged one.
+///
+/// Extends the `Latest` and `Versions` index entries, plus the `Spec` entry
+/// for each version in `versions`. Pass the versions returned by
+/// `list_versions_paged`; a caller with more than `MAX_PAGE_SIZE` versions
+/// pages through them across several calls, which keeps each call's
+/// footprint bounded.
+///
+/// Returns the number of entries extended. Errors with `NothingToTouch` when
+/// no live entry exists for the pair, so a keeper can tell "nothing here" from
+/// "kept alive" instead of silently succeeding.
+pub fn touch(
+    env: Env,
+    contract_id: Address,
+    publisher: Address,
+    versions: Vec<String>,
+) -> Result<u32, Error> {
+    if versions.len() > MAX_PAGE_SIZE {
+        return Err(Error::TooManyVersions);
+    }
+
+    let mut extended: u32 = 0;
+
+    let latest_key = DataKey::Latest(contract_id.clone(), publisher.clone());
+    if env.storage().persistent().has(&latest_key) {
         env.storage()
             .persistent()
+            .extend_ttl(&latest_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+        extended += 1;
+    }
+
+    let versions_key = DataKey::Versions(contract_id.clone(), publisher.clone());
+    if env.storage().persistent().has(&versions_key) {
+        env.storage()
+            .persistent()
+            .extend_ttl(&versions_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+        extended += 1;
+    }
+
+    for version in versions.iter() {
+        let spec_key = DataKey::Spec(contract_id.clone(), publisher.clone(), version);
+        if env.storage().persistent().has(&spec_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&spec_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+            extended += 1;
+        }
+    }
+
+    if extended == 0 {
+        return Err(Error::NothingToTouch);
+    }
+
+    Ok(extended)
+}
+
+    // ── Worker registry: operators ─────────────────────────────────────
+
+    /// Publishes a new versioned operator record. Only the operator's own
+    /// key can create its record - `operator.require_auth()` is enforced.
+    /// Rejects republishing the same (operator, version). Emits
+    /// `OperatorRegistered` on success. Uses persistent storage with the
+    /// same near-max TTL as specs, so records auto-restore rather than
+    /// permanently delete (avoiding the #1025 temporary-storage bug).
+    pub fn register_operator(
+        env: Env,
+        operator: Address,
+        version: String,
+        display_name: String,
+        contact: String,
+        trigger_classes: Vec<String>,
+        networks: Vec<String>,
+        price: i128,
+        denomination: String,
+        latency_tier: String,
+        pointer: String,
+    ) -> Result<(), Error> {
+        operator.require_auth();
+        if version.is_empty() {
+            return Err(Error::EmptyVersion);
+        }
+        if display_name.is_empty() {
+            return Err(Error::EmptyDisplayName);
+        }
+        if pointer.is_empty() {
+            return Err(Error::EmptyPointer);
+        }
+        let op_key = DataKey::Operator(operator.clone(), version.clone());
+        if env.storage().persistent().has(&op_key) {
+            return Err(Error::AlreadyPublished);
+        }
+        let record = OperatorRecord {
+            version: version.clone(),
+            operator: operator.clone(),
+            display_name: display_name.clone(),
+            contact: contact.clone(),
+            trigger_classes: trigger_classes.clone(),
+            networks: networks.clone(),
+            price,
+            denomination: denomination.clone(),
+            latency_tier: latency_tier.clone(),
+            pointer: pointer.clone(),
+            registered_at: env.ledger().timestamp(),
+            registered_at_ledger: env.ledger().sequence(),
+        };
+        env.storage().persistent().set(&op_key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&op_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        let versions_key = DataKey::OperatorVersions(operator.clone());
+        let mut versions: Vec<String> = env
+            .storage()
+            .persistent()
             .get(&versions_key)
-            .unwrap_or_else(|| Vec::new(&env))
+            .unwrap_or_else(|| Vec::new(&env));
+        versions.push_back(version.clone());
+        env.storage().persistent().set(&versions_key, &versions);
+        env.storage()
+            .persistent()
+            .extend_ttl(&versions_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        let latest_key = DataKey::OperatorLatest(operator.clone());
+        env.storage().persistent().set(&latest_key, &version);
+        env.storage()
+            .persistent()
+            .extend_ttl(&latest_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        OperatorRegistered {
+            operator,
+            version,
+            display_name,
+            pointer,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Returns a specific operator version, or None.
+    pub fn get_operator(
+        env: Env,
+        operator: Address,
+        version: String,
+    ) -> Option<OperatorRecord> {
+        let key = DataKey::Operator(operator, version);
+        let rec: Option<OperatorRecord> = env.storage().persistent().get(&key);
+        rec
+    }
+
+    /// Returns the latest operator record, or None.
+    pub fn latest_operator(env: Env, operator: Address) -> Option<OperatorRecord> {
+        let latest_key = DataKey::OperatorLatest(operator.clone());
+        let version: String = env.storage().persistent().get(&latest_key)?;
+        Self::get_operator(env, operator, version)
+    }
+
+    /// Lists all operator versions oldest-first.
+    pub fn list_operator_versions(env: Env, operator: Address) -> Vec<String> {
+        let versions_key = DataKey::OperatorVersions(operator.clone());
+        let all: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&versions_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        let max = MAX_PAGE_SIZE;
+        if all.len() > max {
+            let mut capped: Vec<String> = all.slice(0..max);
+            capped.push_back(String::from_str(&env, TRUNCATION_MARKER));
+            capped
+        } else {
+            all
+        }
+    }
+
+    /// Paged operator versions.
+    pub fn list_operator_versions_paged(
+        env: Env,
+        operator: Address,
+        start: u32,
+        limit: u32,
+    ) -> (Vec<String>, Option<u32>) {
+        let versions_key = DataKey::OperatorVersions(operator);
+        let all: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&versions_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        let total = all.len();
+        if start >= total {
+            return (Vec::new(&env), None);
+        }
+        let effective_limit = limit.min(MAX_PAGE_SIZE);
+        let end = (start + effective_limit).min(total);
+        let page: Vec<String> = all.slice(start..end);
+        let next_cursor = if end < total { Some(end) } else { None };
+        (page, next_cursor)
+    }
+
+    // ── Worker registry: offerings ─────────────────────────────────────
+
+    /// Publishes a new versioned offering for `operator`. Only that
+    /// operator's key can publish - `operator.require_auth()` is enforced,
+    /// so an attacker cannot file an offering under another operator's
+    /// address. Emits `WorkerRegistered` decodable via the existing pipeline.
+    pub fn register_offering(
+        env: Env,
+        operator: Address,
+        version: String,
+        target_contract: Address,
+        function: String,
+        trigger_class: String,
+        price: i128,
+        denomination: String,
+        pointer: String,
+    ) -> Result<(), Error> {
+        operator.require_auth();
+        if version.is_empty() {
+            return Err(Error::EmptyVersion);
+        }
+        if trigger_class.is_empty() {
+            return Err(Error::EmptyTriggerClass);
+        }
+        if pointer.is_empty() {
+            return Err(Error::EmptyPointer);
+        }
+        let off_key = DataKey::Offering(operator.clone(), version.clone());
+        if env.storage().persistent().has(&off_key) {
+            return Err(Error::AlreadyPublished);
+        }
+        let record = OfferingRecord {
+            version: version.clone(),
+            operator: operator.clone(),
+            target_contract: target_contract.clone(),
+            function: function.clone(),
+            trigger_class: trigger_class.clone(),
+            price,
+            denomination: denomination.clone(),
+            pointer: pointer.clone(),
+            registered_at: env.ledger().timestamp(),
+            registered_at_ledger: env.ledger().sequence(),
+        };
+        env.storage().persistent().set(&off_key, &record);
+        env.storage()
+            .persistent()
+            .extend_ttl(&off_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        let versions_key = DataKey::OfferingVersions(operator.clone());
+        let mut versions: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&versions_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        versions.push_back(version.clone());
+        env.storage().persistent().set(&versions_key, &versions);
+        env.storage()
+            .persistent()
+            .extend_ttl(&versions_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        let latest_key = DataKey::OfferingLatest(operator.clone());
+        env.storage().persistent().set(&latest_key, &version);
+        env.storage()
+            .persistent()
+            .extend_ttl(&latest_key, LIFETIME_THRESHOLD, BUMP_AMOUNT);
+
+        WorkerRegistered {
+            operator,
+            version,
+            target_contract,
+            trigger_class,
+            price,
+            pointer,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    /// Returns a specific offering version, or None.
+    pub fn get_offering(
+        env: Env,
+        operator: Address,
+        version: String,
+    ) -> Option<OfferingRecord> {
+        let key = DataKey::Offering(operator, version);
+        let rec: Option<OfferingRecord> = env.storage().persistent().get(&key);
+        rec
+    }
+
+    /// Returns the latest offering for operator, or None.
+    pub fn latest_offering(env: Env, operator: Address) -> Option<OfferingRecord> {
+        let latest_key = DataKey::OfferingLatest(operator.clone());
+        let version: String = env.storage().persistent().get(&latest_key)?;
+        Self::get_offering(env, operator, version)
+    }
+
+    /// Lists all offering versions for operator oldest-first.
+    pub fn list_offering_versions(env: Env, operator: Address) -> Vec<String> {
+        let versions_key = DataKey::OfferingVersions(operator.clone());
+        let all: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&versions_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        let max = MAX_PAGE_SIZE;
+        if all.len() > max {
+            let mut capped: Vec<String> = all.slice(0..max);
+            capped.push_back(String::from_str(&env, TRUNCATION_MARKER));
+            capped
+        } else {
+            all
+        }
+    }
+
+    /// Paged offering versions.
+    pub fn list_offering_versions_paged(
+        env: Env,
+        operator: Address,
+        start: u32,
+        limit: u32,
+    ) -> (Vec<String>, Option<u32>) {
+        let versions_key = DataKey::OfferingVersions(operator);
+        let all: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&versions_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        let total = all.len();
+        if start >= total {
+            return (Vec::new(&env), None);
+        }
+        let effective_limit = limit.min(MAX_PAGE_SIZE);
+        let end = (start + effective_limit).min(total);
+        let page: Vec<String> = all.slice(start..end);
+        let next_cursor = if end < total { Some(end) } else { None };
+        (page, next_cursor)
     }
 }
 

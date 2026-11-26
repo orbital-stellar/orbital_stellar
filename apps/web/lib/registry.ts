@@ -1,137 +1,351 @@
-import { createHash } from "node:crypto";
-import { Networks } from "@stellar/stellar-sdk";
+import {
+  InMemoryVerdictStore,
+  InMemorySpecStore,
+  GitHubIssueReporter,
+  ConsoleAlertManager,
+  NoopIssueReporter,
+  NoopAlertManager,
+  runVerificationJob,
+} from "@orbital-stellar/abi-registry";
 import {
   OnChainAbiRegistryClient,
-  TaxonomyResolver,
-  canonicalizeSpec,
-  classifyKnownInterface,
-  wellKnownTaxonomyMappings,
   ORBITAL_REGISTRY_TESTNET_CONTRACT_ID,
   ORBITAL_REGISTRY_PUBLISHER_ADDRESS,
   ORBITAL_REGISTRY_TESTNET_RPC_URL,
+  ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE,
+  buildOfflineBlobs,
+  wellKnownToContractSpec,
 } from "@orbital-stellar/abi-registry";
-import type { ContractSpec, RegisteredContractSummary, SpecRecord } from "@orbital-stellar/abi-registry";
-import { isContractAddress } from "@orbital-stellar/pulse-core";
+import type { RegisteredSpec, ContractSpec, SpecRecord } from "@orbital-stellar/abi-registry";
+import wellKnownIndex from "@orbital-stellar/abi-registry/specs/well-known/index.json";
+// Imported, not read off disk. `buildWellKnownOfflineBlobs` resolves these
+// relative to `import.meta.url`, which Turbopack rewrites into the bundle -
+// the read then fails with ENOENT on `/_next/static/media/...` and takes the
+// whole page down with a 500.
+import usdcRaw from "@orbital-stellar/abi-registry/specs/well-known/usdc.json";
+import eurcRaw from "@orbital-stellar/abi-registry/specs/well-known/eurc.json";
+import aquaRaw from "@orbital-stellar/abi-registry/specs/well-known/aqua.json";
+import xlmRaw from "@orbital-stellar/abi-registry/specs/well-known/native-asset-wrapper.json";
+
+const g = globalThis as unknown as {
+  __orbitalVerdictStore?: InMemoryVerdictStore;
+  __orbitalSpecStore?: InMemorySpecStore;
+  __orbitalIssueReporter?: GitHubIssueReporter | NoopIssueReporter;
+  __orbitalAlertManager?: ConsoleAlertManager | NoopAlertManager;
+  __orbitalOnChainRegistry?: OnChainAbiRegistryClient;
+  __orbitalLastGoodSpecs?: { specs: OnChainSpecView[]; at: number };
+};
+
+export function getVerdictStore(): InMemoryVerdictStore {
+  if (!g.__orbitalVerdictStore) {
+    g.__orbitalVerdictStore = new InMemoryVerdictStore();
+  }
+  return g.__orbitalVerdictStore;
+}
+
+export function getSpecStore(): InMemorySpecStore {
+  if (!g.__orbitalSpecStore) {
+    g.__orbitalSpecStore = new InMemorySpecStore();
+  }
+  return g.__orbitalSpecStore;
+}
+
+export function getIssueReporter(): GitHubIssueReporter | NoopIssueReporter {
+  if (!g.__orbitalIssueReporter) {
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO;
+    if (token && repo) {
+      g.__orbitalIssueReporter = new GitHubIssueReporter(token, repo);
+    } else {
+      g.__orbitalIssueReporter = new NoopIssueReporter();
+    }
+  }
+  return g.__orbitalIssueReporter;
+}
+
+export function getAlertManager(): ConsoleAlertManager | NoopAlertManager {
+  if (!g.__orbitalAlertManager) {
+    g.__orbitalAlertManager =
+      process.env.NODE_ENV === "production"
+        ? new ConsoleAlertManager()
+        : new NoopAlertManager();
+  }
+  return g.__orbitalAlertManager;
+}
 
 /**
- * Server-only helpers for the `/registry` explorer pages. These read the
- * *deployed* Orbital on-chain ABI registry contract directly - no mock or
- * hardcoded data. Until that contract is actually deployed and seeded
- * (`ORBITAL_REGISTRY_TESTNET_CONTRACT_ID` is populated - see issue 8.3), every
- * function here returns an explicit `{ ok: false, reason: "not_configured" }`
- * rather than fabricating a placeholder listing.
+ * One client for the process, not one per request.
+ *
+ * `OnChainAbiRegistryClient` carries a TTL cache of records and resolved
+ * specs. Constructing it inside the request threw that cache away every time,
+ * so each page render did five RPC simulations and five pointer fetches from
+ * cold - about four seconds of network per view, and all ten calls failing
+ * together whenever the network hiccuped. Rendering the registry as empty
+ * because GitHub was briefly slow is not an accurate report of the registry.
+ *
+ * Hoisting it makes the cache do its job: the first render pays for the reads
+ * and the rest are served from memory until the TTL lapses.
  */
-
-export type RegistryError = {
-  ok: false;
-  reason: "not_configured" | "invalid_contract_id" | "rpc_error";
-  message: string;
-};
-
-export type ListContractsResult =
-  | { ok: true; contracts: RegisteredContractSummary[]; fetchedAt: string }
-  | RegistryError;
-
-export type ContractDetail = {
-  contractId: string;
-  publisher: string;
-  spec: ContractSpec;
-  /** Every published version, oldest first. */
-  versions: SpecRecord[];
-  /** `spec.events[].name -> semantic` for whichever event names the bundled taxonomy maps, via interfaceId classification. Omitted entries are genuinely unmapped, not an error. */
-  semantics: Record<string, string>;
-};
-
-export type ContractDetailResult = { ok: true; detail: ContractDetail } | RegistryError;
-
-export function isRegistryConfigured(): boolean {
-  return ORBITAL_REGISTRY_TESTNET_CONTRACT_ID !== "" && ORBITAL_REGISTRY_PUBLISHER_ADDRESS !== "";
-}
-
-const NOT_CONFIGURED: RegistryError = {
-  ok: false,
-  reason: "not_configured",
-  message:
-    "Orbital's on-chain ABI registry contract hasn't been deployed and seeded yet " +
-    "(ORBITAL_REGISTRY_TESTNET_CONTRACT_ID is unset - see issue 8.3). No live registry data is available.",
-};
-
-let cachedClient: OnChainAbiRegistryClient | undefined;
-function getClient(): OnChainAbiRegistryClient {
-  if (!cachedClient) {
-    cachedClient = new OnChainAbiRegistryClient({
+function getOnChainRegistryClient(): OnChainAbiRegistryClient {
+  if (!g.__orbitalOnChainRegistry) {
+    g.__orbitalOnChainRegistry = new OnChainAbiRegistryClient({
       contractId: ORBITAL_REGISTRY_TESTNET_CONTRACT_ID,
-      rpcUrl: ORBITAL_REGISTRY_TESTNET_RPC_URL,
-      networkPassphrase: Networks.TESTNET,
+      rpcUrl: process.env.ORBITAL_RPC_URL ?? ORBITAL_REGISTRY_TESTNET_RPC_URL,
+      networkPassphrase:
+        process.env.ORBITAL_NETWORK_PASSPHRASE ?? ORBITAL_REGISTRY_TESTNET_NETWORK_PASSPHRASE,
       publisher: ORBITAL_REGISTRY_PUBLISHER_ADDRESS,
+      // The four well-known specs are in this repository, so their blobs never
+      // need fetching: the chain supplies the hash and we already hold bytes
+      // that match it. Halves the network calls per cold read and drops
+      // raw.githubusercontent.com out of the path entirely.
+      offlineBlobs: buildOfflineBlobs(
+        [usdcRaw, eurcRaw, aquaRaw, xlmRaw].map((raw) =>
+          wellKnownToContractSpec(raw as Parameters<typeof wellKnownToContractSpec>[0]),
+        ),
+      ),
     });
   }
-  return cachedClient;
+  return g.__orbitalOnChainRegistry;
 }
 
-let cachedTaxonomy: TaxonomyResolver | undefined;
-function getTaxonomyResolver(): TaxonomyResolver {
-  if (!cachedTaxonomy) {
-    cachedTaxonomy = TaxonomyResolver.loadTrusted(wellKnownTaxonomyMappings);
-  }
-  return cachedTaxonomy;
+/**
+ * stellar.expert names mainnet "public" in its path, so the network has to be
+ * mapped rather than interpolated. Mirrors `lib/workers.ts`'s own copy of
+ * this same mapping - each is small enough that a shared module would cost
+ * more than it saves.
+ */
+const STELLAR_EXPERT_NETWORK_PATH = { testnet: "testnet", mainnet: "public" } as const;
+
+function stellarExpertNetwork(): string {
+  const network = (process.env.ORBITAL_NETWORK as "mainnet" | "testnet" | undefined) ?? "testnet";
+  return STELLAR_EXPERT_NETWORK_PATH[network] ?? "testnet";
 }
 
-/** Lists contracts observed in the registry's recent `SpecPublished` event history - see `OnChainAbiRegistryClient.listRegisteredContracts`'s own doc comment for the bounded-lookback caveat this inherits. */
-export async function listRegisteredContracts(): Promise<ListContractsResult> {
-  if (!isRegistryConfigured()) return NOT_CONFIGURED;
-
-  try {
-    const contracts = await getClient().listRegisteredContracts();
-    return { ok: true, contracts, fetchedAt: new Date().toISOString() };
-  } catch (err) {
-    return {
-      ok: false,
-      reason: "rpc_error",
-      message: err instanceof Error ? err.message : "Failed to reach the Soroban RPC endpoint.",
-    };
-  }
+export function stellarExpertContractUrl(contractId: string): string {
+  return `https://stellar.expert/explorer/${stellarExpertNetwork()}/contract/${contractId}`;
 }
 
-/** Resolves one contract's spec, full version history, and (best-effort) semantic labels for its declared events. */
-export async function getContractDetail(contractId: string): Promise<ContractDetailResult> {
-  if (!isRegistryConfigured()) return NOT_CONFIGURED;
-  if (!isContractAddress(contractId)) {
-    return {
-      ok: false,
-      reason: "invalid_contract_id",
-      message: `"${contractId}" is not a valid Soroban contract address.`,
-    };
+export function stellarExpertAccountUrl(publicKey: string): string {
+  return `https://stellar.expert/explorer/${stellarExpertNetwork()}/account/${publicKey}`;
+}
+
+/**
+ * A spec as the registry explorer displays it: the on-chain record, plus the
+ * spec body resolved through the record's pointer.
+ */
+export type OnChainSpecView = {
+  contractId: string;
+  spec: ContractSpec;
+  /**
+   * The on-chain record backing `spec` - publisher, spec hash, off-chain
+   * pointer, and publish ledger. `undefined` only if the record vanished
+   * between the two reads (a re-publish mid-request); `spec` itself is
+   * still valid in that case, it just can't be attributed.
+   */
+  record?: SpecRecord;
+};
+
+/** A contract the registry could not be read for, and why. */
+export type OnChainSpecFailure = {
+  contractId: string;
+  reason: string;
+};
+
+/**
+ * What the explorer got: what resolved, and what did not.
+ *
+ * Both halves matter. Returning only the successes makes a transient RPC
+ * timeout indistinguishable from a contract that was never registered - the
+ * page would quietly show three of four rows and claim nothing was wrong. A
+ * registry explorer that cannot tell "I could not read this" from "this does
+ * not exist" is misreporting the thing it exists to report.
+ */
+export type OnChainSpecsResult = {
+  specs: OnChainSpecView[];
+  failures: OnChainSpecFailure[];
+  /** False when no registry contract is configured at all. */
+  configured: boolean;
+  /**
+   * When set, `specs` is the last successful read rather than a fresh one,
+   * because every read this time failed. The page must label it - showing
+   * stale data as current is a worse failure than showing none.
+   */
+  staleAsOf?: number;
+};
+
+/**
+ * Reads the registry's contents from chain.
+ *
+ * NOTE ON THE CONTRACT ID SET. The registry contract has no "list every
+ * registered contract" entry point - `latest`, `get_version` and
+ * `list_versions` are all keyed by `(contract_id, publisher)`. So the set of
+ * ids to look up has to come from somewhere off chain; here it is the bundled
+ * well-known index, which is exactly what `scripts/seed-well-known.ts`
+ * publishes. Every *value* rendered is fetched live and verified against the
+ * on-chain spec hash - only the list of ids to ask about is local.
+ *
+ * A real explorer needs enumeration on the contract itself. That is a
+ * registry-contract change, not a page change, and is why this function is
+ * written to be replaced rather than extended.
+ */
+export async function getOnChainSpecs(): Promise<OnChainSpecsResult> {
+  if (!ORBITAL_REGISTRY_TESTNET_CONTRACT_ID || !ORBITAL_REGISTRY_PUBLISHER_ADDRESS) {
+    return { specs: [], failures: [], configured: false };
   }
 
-  try {
-    const client = getClient();
-    const [spec, versions] = await Promise.all([client.getSpec(contractId), client.listVersions(contractId)]);
+  const client = getOnChainRegistryClient();
 
-    if (!spec) {
-      return {
-        ok: false,
-        reason: "rpc_error",
-        message: `No spec has been published for ${contractId} under the configured publisher.`,
-      };
+  const ids = (wellKnownIndex as { specs: { contract_id: string }[] }).specs.map(
+    (e) => e.contract_id,
+  );
+
+  const specs: OnChainSpecView[] = [];
+  const failures: OnChainSpecFailure[] = [];
+
+  await Promise.all(
+    ids.map(async (contractId) => {
+      try {
+        const spec = await client.getSpec(contractId);
+        // `null` is "no spec published for this contract", which is a fact
+        // about the registry rather than a failure to read it - the bundled
+        // index deliberately lists the SAC interface placeholder, which is
+        // never seeded.
+        if (spec) {
+          // Cache hit: getSpec() above already populated the records cache
+          // for this contractId via the same underlying list_versions +
+          // get_version reads, so this issues no additional RPC calls.
+          const records = await client.getRecords(contractId);
+          specs.push({ contractId, spec, record: records[records.length - 1] });
+        }
+      } catch (err) {
+        const cause = (err as { cause?: { code?: string; message?: string; errors?: unknown[] } })
+          ?.cause;
+        // undici reports transport problems as a bare "fetch failed"; the
+        // reason a reader actually needs - ETIMEDOUT, ENOTFOUND, a refused
+        // connection - is only on the cause. Surfacing it is the difference
+        // between an operator diagnosing this in seconds and guessing.
+        const detail = cause
+          ? ` (${[
+              cause.code,
+              cause.message,
+              Array.isArray(cause.errors)
+                ? cause.errors.map((e) => (e as Error)?.message ?? String(e)).join("; ")
+                : undefined,
+            ]
+              .filter(Boolean)
+              .join(" ")})`
+          : "";
+        failures.push({
+          contractId,
+          reason: `${err instanceof Error ? err.message : String(err)}${detail}`,
+        });
+      }
+    }),
+  );
+
+  specs.sort((a, b) => a.spec.name.localeCompare(b.spec.name));
+
+  if (specs.length > 0) {
+    g.__orbitalLastGoodSpecs = { specs, at: Date.now() };
+    return { specs, failures, configured: true };
+  }
+
+  // Everything failed. The public testnet RPC is periodically slow enough that
+  // connections time out before a response lands - measured at 4-15s per call
+  // during one such stretch - and when that happens no client-side retry helps.
+  //
+  // A registry that was readable a minute ago has not stopped existing because
+  // a third party is overloaded, so serve what was last read rather than an
+  // empty page. It is labelled stale, with its age, because presenting old
+  // data as current would be a worse failure than showing none: a reader could
+  // not tell a removed spec from an unreachable one.
+  const lastGood = g.__orbitalLastGoodSpecs;
+  if (lastGood && failures.length > 0) {
+    return { specs: lastGood.specs, failures, configured: true, staleAsOf: lastGood.at };
+  }
+
+  return { specs, failures, configured: true };
+}
+
+/** What the registry explorer's per-contract detail page (#913) got for one contractId. */
+export type OnChainContractDetail =
+  | {
+      found: true;
+      spec: ContractSpec;
+      /** Every published version's on-chain record, oldest to newest - the version history. */
+      records: ReadonlyArray<SpecRecord>;
+      fetchedAt: number;
     }
+  | { found: false; reason: "not_registered"; fetchedAt: number }
+  | { found: false; reason: "unavailable"; error: string };
 
-    const specHash = createHash("sha256").update(canonicalizeSpec(spec)).digest("hex");
-    const interfaceId = classifyKnownInterface(spec);
-    const taxonomy = getTaxonomyResolver();
+/**
+ * Reads one contract's full on-chain detail: its current spec plus every
+ * published version's record. Unlike `getOnChainSpecs()`, this is not
+ * limited to the bundled well-known index - it reads whatever `contractId`
+ * the caller asks for, since a detail page is reached by an id the list
+ * page already resolved (or a direct link).
+ */
+export async function getOnChainContractDetail(contractId: string): Promise<OnChainContractDetail> {
+  if (!ORBITAL_REGISTRY_TESTNET_CONTRACT_ID || !ORBITAL_REGISTRY_PUBLISHER_ADDRESS) {
+    return { found: false, reason: "unavailable", error: "No registry contract configured." };
+  }
 
-    const semantics: Record<string, string> = {};
-    for (const event of spec.events) {
-      const resolved = taxonomy.resolve({ contractId, eventTopic: event.name, specHash, interfaceId });
-      if (resolved !== undefined) semantics[event.name] = resolved;
+  const client = getOnChainRegistryClient();
+  try {
+    const [spec, records] = await Promise.all([
+      client.getSpec(contractId),
+      client.getRecords(contractId),
+    ]);
+    if (!spec || records.length === 0) {
+      return { found: false, reason: "not_registered", fetchedAt: Date.now() };
     }
-
-    return { ok: true, detail: { contractId, publisher: ORBITAL_REGISTRY_PUBLISHER_ADDRESS, spec, versions, semantics } };
+    return { found: true, spec, records, fetchedAt: Date.now() };
   } catch (err) {
+    const cause = (err as { cause?: { code?: string; message?: string; errors?: unknown[] } })
+      ?.cause;
+    const detail = cause
+      ? ` (${[
+          cause.code,
+          cause.message,
+          Array.isArray(cause.errors)
+            ? cause.errors.map((e) => (e as Error)?.message ?? String(e)).join("; ")
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ")})`
+      : "";
     return {
-      ok: false,
-      reason: "rpc_error",
-      message: err instanceof Error ? err.message : "Failed to reach the Soroban RPC endpoint.",
+      found: false,
+      reason: "unavailable",
+      error: `${err instanceof Error ? err.message : String(err)}${detail}`,
     };
   }
+}
+
+export async function runVerification(): Promise<
+  Awaited<ReturnType<typeof runVerificationJob>>
+> {
+  const storedSpecs = await getSpecStore().getAll();
+  if (storedSpecs.length === 0) {
+    return {
+      total: 0,
+      verified: 0,
+      mismatch: 0,
+      unverifiable: 0,
+      errors: [],
+      issuesCreated: [],
+    };
+  }
+
+  return runVerificationJob({
+    specStore: getSpecStore(),
+    verdictStore: getVerdictStore(),
+    verifyOptions: {
+      rpcUrl: process.env.ORBITAL_RPC_URL ?? "https://soroban-testnet.stellar.org",
+      network: (process.env.ORBITAL_NETWORK as "mainnet" | "testnet" | undefined) ?? "testnet",
+    },
+    issueReporter: getIssueReporter(),
+    alertManager: getAlertManager(),
+  });
 }

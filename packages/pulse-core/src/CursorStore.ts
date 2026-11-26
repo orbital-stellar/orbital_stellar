@@ -68,6 +68,16 @@ export abstract class CursorStore {
    */
   ping?: () => Promise<void>;
 }
+
+/**
+ * Structural shape of a cursor store, for callers that do not want to extend
+ * {@link CursorStore}.
+ *
+ * Only `get` and `set` are required; `getMany`, `setMany`, `getAll` and `ping`
+ * are optional, so a store can implement just the batch helpers or the
+ * liveness probe it actually supports. Any `CursorStore` instance satisfies
+ * this type.
+ */
 export type CursorStoreLike = {
   get(streamKey: string): Promise<string | null>;
   set(streamKey: string, cursor: string): Promise<void>;

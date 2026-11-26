@@ -10,6 +10,7 @@ import {
   discoverContractSpec,
   NoEmbeddedSpecError,
   type ContractSpec,
+  type PublishResult,
   type RegistryPublisher,
 } from "@orbital-stellar/abi-registry";
 
@@ -22,6 +23,13 @@ function isContractEvent(event: unknown): event is ContractEmittedEvent | Contra
   return type === "contract.emitted" || type === "contract.invoked";
 }
 
+/**
+ * Configuration for {@link AutoPublishIndexer}: the event engine to watch,
+ * the registry pieces it checks and publishes through, and the Soroban RPC
+ * endpoint it fetches contract WASM from. Pass it to the constructor when
+ * running the indexer as a standalone process so Orbital publishes specs
+ * for newly seen contracts under its own key.
+ */
 export type AutoPublishIndexerConfig = {
   /** The engine to observe for unknown contractIds. Must already be started by the caller. */
   engine: EventEngine;
@@ -31,6 +39,11 @@ export type AutoPublishIndexerConfig = {
   publisher: RegistryPublisher;
   /** Soroban RPC endpoint used to fetch a contract's WASM for discovery. */
   rpcUrl: string;
+  /**
+   * Stellar network the discovered contracts live on. Recorded on each
+   * discovered spec; omit it and the spec is published without a network.
+   * The RPC endpoint (`rpcUrl`) is what actually selects the network.
+   */
   network?: "mainnet" | "testnet" | "futurenet";
   /**
    * Decides where a newly discovered spec's JSON blob will be hosted before
@@ -40,6 +53,10 @@ export type AutoPublishIndexerConfig = {
    * return the URL it'll be served from).
    */
   pointerStrategy: (spec: ContractSpec, canonicalJson: string) => Promise<string>;
+  /**
+   * Structured logger for operational messages (discovery failures, backoff,
+   * publish outcomes). Omit it and the indexer stays silent.
+   */
   logger?: Logger;
   /** How long to back off from retrying a contract with no embedded spec before trying again. Defaults to 30 minutes. */
   undiscoverableTtlMs?: number;
@@ -157,8 +174,47 @@ export class AutoPublishIndexer {
     const pointer = await this.config.pointerStrategy(spec, canonicalJson);
     const specWithPointer: ContractSpec = { ...spec, pointer };
 
-    await this.config.publisher.publish(specWithPointer);
-    this.config.logger?.info("orbital-indexer: published auto-discovered spec", { contractId });
+    let publishResult: PublishResult;
+    try {
+      publishResult = await this.config.publisher.publish(specWithPointer);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      // ── Republish rejection ────────────────────────────────────────────
+      // The registry contract rejects duplicate (contractId, version, publisher)
+      // triples with AlreadyPublished. Treat this as success-with-existing:
+      // another process (or a prior run) already filed this version.
+      if (
+        message.includes("AlreadyPublished") ||
+        message.includes("already been published") ||
+        message.includes("contract_error")
+      ) {
+        this.config.logger?.info(
+          "orbital-indexer: spec already published by another process, using existing",
+          { contractId, version: spec.version },
+        );
+        return specWithPointer;
+      }
+
+      // ── Sequence-number collision ──────────────────────────────────────
+      // Another process using the same signing key submitted a tx with the
+      // same sequence number. Refresh and retry once.
+      if (message.includes("tx_bad_seq") || message.includes("sequence")) {
+        this.config.logger?.info("orbital-indexer: sequence collision, retrying publish once", {
+          contractId,
+        });
+        publishResult = await this.config.publisher.publish(specWithPointer);
+      } else {
+        throw err;
+      }
+    }
+
+    this.config.logger?.info("orbital-indexer: published auto-discovered spec", {
+      contractId,
+      version: spec.version,
+      specHash: publishResult.etag,
+      txHash: publishResult.txHash,
+    });
     return specWithPointer;
   }
 }

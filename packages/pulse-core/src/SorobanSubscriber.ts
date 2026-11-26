@@ -70,13 +70,28 @@ export interface SorobanSubscription {
   onEvent?: (event: SorobanEvent) => Promise<void>;
 }
 
+/**
+ * The fields of the `engine.reconnecting` event a {@link SorobanSubscriber}
+ * emits when a retryable RPC failure, other than a rate limit, makes it
+ * schedule another poll. The emitted object also carries `type` and
+ * `emittedAt`; listen for it to log or show that the Soroban feed is retrying.
+ */
 export interface ReconnectingPayload {
+  /** How many polls in a row have failed, this one included. */
   attempt: number;
+  /** Milliseconds the scheduled retry waits. */
   delayMs: number;
+  /** The cursor the failed poll was reading from, when it had one. */
   cursor?: string;
+  /** Always `"soroban"`: the retry is against Soroban RPC, not Horizon. */
   source: "soroban";
 }
 
+/**
+ * Options for {@link SorobanSubscriber}: the RPC client and the cursor store it
+ * needs, plus paging, polling, bounded-replay and retry settings. Only `rpc`
+ * and `cursorStore` are required.
+ */
 export interface SorobanSubscriberOptions {
   rpc: SorobanRpc;
   cursorStore: CursorStore;
@@ -154,6 +169,20 @@ export function resolveSorobanPageLimit(pageLimit?: number): number {
   return resolved;
 }
 
+/**
+ * Polls a Soroban RPC's `getEvents` for contract events and delivers each one
+ * to its handler, resuming from the cursor in its `cursorStore` and dropping
+ * repeats within a window of recent event ids. `EventEngine` creates one when
+ * `config.soroban` is set; construct it yourself only to drive the polling
+ * directly, for example a bounded replay with `endLedger`. It polls again after
+ * a backoff when the RPC fails in a retryable way, restarts from the latest
+ * ledger when its cursor has expired, and emits `engine.reconnecting`,
+ * `engine.rate_limited`, `engine.reconnected` and `engine.cursor_expired` on
+ * itself as it does.
+ *
+ * @throws RangeError From the constructor, when `pageLimit`, `pollIntervalMs`,
+ *   `startLedgerLookback` or `startLedger` is out of range.
+ */
 export class SorobanSubscriber extends EventEmitter {
   private readonly rpc: SorobanRpc;
   private readonly cursorStore: CursorStore;

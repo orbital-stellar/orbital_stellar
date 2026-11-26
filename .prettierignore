@@ -4,3 +4,7 @@ coverage
 pnpm-lock.yaml
 **/*.md
 apps/web/.next
+
+# Generated conformance vectors (scripts/generate-attestation-vectors.ts) and Rust build output
+packages/abi-registry/test-vectors/
+packages/abi-registry/verifiers/rust/target/

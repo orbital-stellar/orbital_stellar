@@ -4,12 +4,62 @@ import {
   type SorobanRpcErrorCode,
   type SorobanRpcErrorOptions,
 } from "./errors.js";
+import { fullJitterBackoffMs } from "./backoff.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** Minimum interval between getLatestLedgerCloseTime RPC calls. */
+const MIN_LEDGER_CLOSE_TIME_POLL_INTERVAL_MS = 1_000;
+
+/** CAP-67 (SEP-41) standard event topic names for Stellar asset contracts. */
+export const CAP_67_EVENT_TOPICS = [
+  "transfer",
+  "mint",
+  "burn",
+  "clawback",
+  "set_authorized",
+] as const;
+
+/**
+ * Pre-built Soroban event filters matching any CAP-67 topic as the first topic
+ * segment. The base64 values are pre-computed XDR ScVal symbols so that no
+ * runtime dependency on `@stellar/stellar-sdk` is required at module load.
+ */
+const CAP_67_TOPIC_FILTERS: SorobanEventFilter[] = [
+  { type: "contract", topics: [["AAAADwAAAAh0cmFuc2Zlcg=="]] },
+  { type: "contract", topics: [["AAAADwAAAARtaW50"]] },
+  { type: "contract", topics: [["AAAADwAAAARidXJu"]] },
+  { type: "contract", topics: [["AAAADwAAAAhjbGF3YmFjaw=="]] },
+  { type: "contract", topics: [["AAAADwAAAA5zZXRfYXV0aG9yaXplZAAA"]] },
+];
+
+/**
+ * The Protocol version CAP-67 (the unified event stream) shipped in.
+ * {@link rpcSupportsUnifiedEvents} uses this to decide `"auto"` ingestion
+ * mode's fallback (issue 6.12).
+ */
+export const CAP_67_MIN_PROTOCOL_VERSION = 23;
+
+/**
+ * Whether a probed Soroban RPC supports the CAP-67 unified event stream,
+ * per its {@link SorobanNetworkInfo.protocolVersion}. `undefined` - an RPC
+ * that didn't report a protocol version at all - is treated as unsupported:
+ * `"auto"` ingestion mode falls back to `"horizon"` rather than assuming
+ * support it can't confirm.
+ */
+export function rpcSupportsUnifiedEvents(info: SorobanNetworkInfo | undefined): boolean {
+  return info?.protocolVersion !== undefined && info.protocolVersion >= CAP_67_MIN_PROTOCOL_VERSION;
+}
+
+/**
+ * Network information returned by the Soroban RPC `getNetwork` method.
+ */
 export type SorobanNetworkInfo = {
+  /** Optional friendbot URL for testnet/futurenet. */
   friendbotUrl?: string;
+  /** The network passphrase (e.g., "Public Global Stellar Network ; September 2015"). */
   passphrase: string;
+  /** Optional protocol version indicating CAP-67 unified events support. */
   protocolVersion?: number;
 };
 
@@ -42,6 +92,17 @@ export interface SorobanRpcClientOptions {
   /** Optional logger. Per-request diagnostics go to `logger.debug` (header values redacted). */
   logger?: Logger;
   /**
+   * Minimum interval between getLatestLedgerCloseTime RPC calls.
+   * Defaults to 1 second, which prevents idle fleets from hammering RPC.
+   */
+  minLedgerCloseTimePollIntervalMs?: number;
+  /**
+   * Injectable clock for poll-cadence decisions. Defaults to `Date.now`.
+   * Ledger close time remains the authority for due-ness; this clock is only
+   * used to bound how often the RPC endpoint is polled.
+   */
+  now?: () => number;
+  /**
    * Default XDR format for `getEvents` requests.
    * - `"json"` (default): the RPC decodes XDR values into JSON objects, and
    *   `decodedData` is populated on normalized events.
@@ -52,6 +113,35 @@ export interface SorobanRpcClientOptions {
    * @default "json"
    */
   xdrFormat?: "base64" | "json";
+}
+
+/** Options for {@link SorobanRpcClient.pollUnifiedEvents}. */
+export interface PollUnifiedEventsOptions {
+  signal?: AbortSignal;
+  cursor?: string;
+  pageLimit?: number;
+  maxRetries?: number;
+  initialBackoffMs?: number;
+  maxBackoffMs?: number;
+  /**
+   * Called just before each retry backoff sleep, after a retryable
+   * `getEvents` failure. Lets a caller (e.g. `EventEngine`) surface
+   * reconnect/rate-limit lifecycle notifications without duplicating this
+   * loop's retry bookkeeping.
+   */
+  onRetry?: (info: { attempt: number; delayMs: number; rateLimited: boolean }) => void;
+  /**
+   * Called once a poll succeeds after one or more retries, before the
+   * internal attempt counter resets. Not called on the very first successful
+   * poll of a session (there was nothing to recover from).
+   */
+  onRecovered?: (info: { attempt: number }) => void;
+  /**
+   * Called after each successful page with an advanced cursor, so a caller
+   * can persist progress incrementally instead of only learning the final
+   * cursor once the whole loop returns (e.g. on `stop()`).
+   */
+  onCursor?: (cursor: string) => void;
 }
 
 /** Per-call options for {@link SorobanRpcClient.getEvents}. */
@@ -65,66 +155,190 @@ export interface GetEventsOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * XDR encoding format for Soroban events.
+ * - `"json"`: the RPC decodes XDR values into JSON objects.
+ * - `"base64"`: raw base64 strings are preserved.
+ */
 export type SorobanEventXdrFormat = "base64" | "json";
 
+/**
+ * Filter for querying Soroban events.
+ * Supports filtering by event type, contract IDs, topics, and topic filters.
+ */
 export type SorobanEventFilter = {
+  /** The type of event to filter for. */
   type?: "contract" | "system" | "diagnostic" | "contract.invoked" | "contract.emitted";
+  /** Contract IDs to filter events from. */
   contractIds?: string[];
+  /** Topic match patterns: each inner array is one pattern, segment by segment (`null` = wildcard). */
   topics?: Array<Array<string | null>>;
+  /** Single topic pattern, segment by segment (`null` = wildcard). */
   topicFilters?: Array<string | null>;
 };
 
+/**
+ * Parameters for the `getEvents` RPC call.
+ */
 export type SorobanGetEventsParams = {
+  /** Start fetching from this ledger sequence. */
   startLedger?: number;
+  /** Cursor to resume from a previous page. */
   cursor?: string;
+  /** Cursor to start from; what the positional `getEvents(startCursor, ...)` form sets. */
   startCursor?: string;
+  /** Event filters (up to 5). */
   filters?: SorobanEventFilter[] | ContractSubscriptionFilter[];
+  /** Maximum number of events to return. */
   limit?: number;
+  /** Pagination options. */
   pagination?: {
     cursor?: string;
     limit?: number;
   };
+  /** XDR format for this request. */
   xdrFormat?: SorobanEventXdrFormat;
 };
 
+/**
+ * Per-call options for Soroban RPC methods.
+ */
 export type SorobanRpcCallOptions = {
+  /** Optional AbortSignal for request cancellation. */
   signal?: AbortSignal;
 };
 
+/**
+ * Raw Soroban event record as returned by the RPC `getEvents` method.
+ */
 export type SorobanRpcEvent = {
+  /** Event type (e.g., "contract", "system"). */
   type: string;
+  /** Ledger sequence where the event was emitted. */
   ledger: number;
+  /** ISO timestamp of ledger close. */
   ledgerClosedAt?: string;
+  /** Contract ID that emitted the event (for contract events). */
   contractId?: string;
+  /** Unique event ID. */
   id: string;
+  /** Paging token for cursor-based pagination. */
   pagingToken?: string;
+  /** Legacy single topic field. */
   topic?: unknown[];
+  /** Full topic array (name + topic segments). */
   topics?: unknown[];
+  /** Event value: base64 XDR by default, decoded JSON when `xdrFormat` is `"json"`. */
   value?: unknown;
+  /** Transaction hash that produced this event. */
   txHash?: string;
+  /** Whether the event came from a successful contract call. */
   inSuccessfulContractCall?: boolean;
+  /** Catch-all for any additional RPC fields. */
   [key: string]: unknown;
 };
 
+/**
+ * Result of the `getEvents` RPC call.
+ */
 export type SorobanGetEventsResult = {
+  /** Array of events returned by the RPC. */
   events: SorobanRpcEvent[];
+  /** The latest ledger sequence at the time of the query. */
   latestLedger?: number;
+  /** Cursor for fetching the next page. */
   cursor?: string;
+  /** Additional properties from the RPC response. */
   [key: string]: unknown;
 };
 
-export type SorobanLatestLedgerResult = {
+/** Raw `simulateTransaction` result. Shapes match the JSON-RPC payload so it can be handed straight to `rpc.assembleTransaction`. */
+export type SorobanSimulateTransactionResult = {
+  /** Echoed JSON-RPC request id. */
   id?: string;
-  protocolVersion?: number;
-  sequence: number;
+  /** Present when the host rejected the invocation. Absent on success. */
+  error?: string;
+  /** Resource fee the simulation says this invocation needs, in stroops. */
+  minResourceFee?: string;
+  /** Base64 `SorobanTransactionData` (the footprint and resource limits). */
+  transactionData?: string;
+  results?: Array<{ xdr: string; auth?: string[] }>;
+  /** Set when the invocation touches an archived entry that must be restored first. */
+  restorePreamble?: { minResourceFee: string; transactionData: string };
+  events?: string[];
+  latestLedger?: number;
 };
 
+/** Raw `sendTransaction` result. `PENDING` only means the network accepted it for inclusion. */
+export type SorobanSendTransactionResult = {
+  status: "PENDING" | "DUPLICATE" | "TRY_AGAIN_LATER" | "ERROR";
+  hash: string;
+  /** Base64 `TransactionResult`, present when `status` is `ERROR`. */
+  errorResultXdr?: string;
+  latestLedger?: number;
+};
+
+/** Raw `getTransaction` result. */
+export type SorobanGetTransactionResult = {
+  status: "NOT_FOUND" | "SUCCESS" | "FAILED";
+  /** Base64 `TransactionMeta`, present once the transaction is in a ledger. */
+  resultMetaXdr?: string;
+  resultXdr?: string;
+  ledger?: number;
+  createdAt?: string;
+  applicationOrder?: number;
+  latestLedger?: number;
+};
+
+/**
+ * Options for {@link SorobanRpcClient.pollTransaction}.
+ */
+export type PollTransactionOptions = SorobanRpcCallOptions & {
+  /** How long to wait between polls. Defaults to 1000ms. */
+  intervalMs?: number;
+  /** How long to keep polling before giving up. Defaults to 60000ms. */
+  timeoutMs?: number;
+};
+
+/**
+ * Result of the `getLatestLedger` RPC call.
+ */
+export type SorobanLatestLedgerResult = {
+  /** Hash identifying the latest ledger. */
+  id?: string;
+  /** Protocol version of the network. */
+  protocolVersion?: number;
+  /** The latest ledger sequence number. */
+  sequence: number;
+  /** Ledger close time as a Unix timestamp. */
+  ledgerCloseTime?: number;
+};
+
+/**
+ * Minimal ledger close-time source used by the time-based trigger evaluator.
+ *
+ * The evaluator depends on this interface rather than on `SorobanRpcClient`
+ * directly, which keeps it pure and lets unit tests inject a fake ledger
+ * source. Implementations must return the latest ledger's close time in Unix
+ * seconds, never host wall-clock time.
+ */
+export interface LedgerCloseTimeSource {
+  getLatestLedgerCloseTime(options?: SorobanRpcCallOptions): Promise<number>;
+}
+
+/**
+ * Successful JSON-RPC 2.0 response.
+ * @typeParam T - The shape of the `result` field.
+ */
 export type JsonRpcSuccess<T> = {
   jsonrpc: "2.0";
   id: string | number | null;
   result: T;
 };
 
+/**
+ * Failed JSON-RPC 2.0 response.
+ */
 export type JsonRpcFailure = {
   jsonrpc: "2.0";
   id: string | number | null;
@@ -135,6 +349,10 @@ export type JsonRpcFailure = {
   };
 };
 
+/**
+ * JSON-RPC 2.0 response (success or failure).
+ * @typeParam T - The shape of the `result` field on success.
+ */
 export type JsonRpcResponse<T> = JsonRpcSuccess<T> | JsonRpcFailure;
 
 /** Maps an HTTP status code to a {@link SorobanRpcError} classification. */
@@ -196,6 +414,21 @@ function isAbortSignal(value: unknown): value is AbortSignal {
   );
 }
 
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? createAbortError("Aborted"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? createAbortError("Aborted"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * Client for connecting to Soroban RPC providers.
  *
@@ -215,7 +448,7 @@ function isAbortSignal(value: unknown): value is AbortSignal {
  * const { events } = await client.getEvents();
  * ```
  */
-export class SorobanRpcClient {
+export class SorobanRpcClient implements LedgerCloseTimeSource {
   private static cachedNetwork: SorobanNetworkInfo | null = null;
 
   static setCachedNetwork(info: SorobanNetworkInfo | null): void {
@@ -248,6 +481,10 @@ export class SorobanRpcClient {
   private readonly timeoutMs: number;
   private readonly logger?: Logger;
   private readonly xdrFormat: "base64" | "json";
+  private latestLedgerCloseTime?: number;
+  private lastLedgerCloseTimeFetchMs = 0;
+  private readonly now: () => number;
+  private readonly minLedgerCloseTimePollIntervalMs: number;
 
   /**
    * @param options - Configuration for the RPC client.
@@ -264,6 +501,9 @@ export class SorobanRpcClient {
       throw new TypeError("SorobanRpcClient requires a fetch implementation.");
     }
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.minLedgerCloseTimePollIntervalMs =
+      options.minLedgerCloseTimePollIntervalMs ?? MIN_LEDGER_CLOSE_TIME_POLL_INTERVAL_MS;
+    this.now = options.now ?? Date.now;
     this.logger = options.logger;
     this.xdrFormat = options.xdrFormat ?? "json";
   }
@@ -471,9 +711,183 @@ export class SorobanRpcClient {
     return result.sequence;
   }
 
+  /**
+   * Simulates a transaction. A rejected invocation is a *successful* RPC call
+   * carrying an `error` string - callers decide whether that rejection is
+   * expected (a contract saying "not yet due") or a real fault.
+   */
+  async simulateTransaction(
+    transactionXdr: string,
+    options?: SorobanRpcCallOptions,
+  ): Promise<SorobanSimulateTransactionResult> {
+    return this.requestResult<SorobanSimulateTransactionResult>(
+      "simulateTransaction",
+      { transaction: transactionXdr },
+      options,
+    );
+  }
+
+  /**
+   * Submits a signed transaction. A `PENDING` reply means the network accepted
+   * it for inclusion, not that it succeeded - confirm with
+   * {@link pollTransaction}.
+   */
+  async sendTransaction(
+    transactionXdr: string,
+    options?: SorobanRpcCallOptions,
+  ): Promise<SorobanSendTransactionResult> {
+    return this.requestResult<SorobanSendTransactionResult>(
+      "sendTransaction",
+      { transaction: transactionXdr },
+      options,
+    );
+  }
+
+  /** Reads a submitted transaction's status. `NOT_FOUND` means "not in a ledger yet". */
+  async getTransaction(
+    hash: string,
+    options?: SorobanRpcCallOptions,
+  ): Promise<SorobanGetTransactionResult> {
+    return this.requestResult<SorobanGetTransactionResult>("getTransaction", { hash }, options);
+  }
+
+  /**
+   * Polls {@link getTransaction} until the transaction lands or the timeout
+   * elapses, so a caller confirms an outcome instead of assuming one from a
+   * successful send.
+   *
+   * @throws {SorobanRpcError} `code: "server"`, `retryable: true` if the
+   *   transaction has not landed within `timeoutMs` - the transaction may still
+   *   be included later, so this is a "don't know yet", not a failure.
+   */
+  async pollTransaction(
+    hash: string,
+    options?: PollTransactionOptions,
+  ): Promise<SorobanGetTransactionResult> {
+    const intervalMs = Math.max(1, options?.intervalMs ?? 1_000);
+    const timeoutMs = Math.max(1, options?.timeoutMs ?? 60_000);
+    const deadline = Date.now() + timeoutMs;
+
+    for (;;) {
+      const result = await this.getTransaction(hash, { signal: options?.signal });
+      if (result.status !== "NOT_FOUND") return result;
+
+      if (Date.now() + intervalMs > deadline) {
+        throw new SorobanRpcError(`transaction ${hash} was not confirmed within ${timeoutMs}ms`, {
+          code: "server",
+          retryable: true,
+        });
+      }
+      await sleep(intervalMs, options?.signal);
+    }
+  }
+
+  /**
+   * Returns the latest ledger close time as a Unix timestamp in seconds.
+   *
+   * Ledger close time is the authoritative clock for time-based workers.
+   * Host wall-clock time is only used to decide when to poll; due-ness must
+   * always be evaluated against this ledger value.
+   */
+  async getLatestLedgerCloseTime(options?: SorobanRpcCallOptions): Promise<number> {
+    const nowMs = this.now();
+    if (
+      this.latestLedgerCloseTime !== undefined &&
+      nowMs - this.lastLedgerCloseTimeFetchMs < this.minLedgerCloseTimePollIntervalMs
+    ) {
+      return this.latestLedgerCloseTime;
+    }
+
+    const result = await this.requestResult<SorobanLatestLedgerResult>(
+      "getLatestLedger",
+      undefined,
+      options,
+    );
+    if (typeof result.ledgerCloseTime !== "number") {
+      throw new SorobanRpcError(
+        "Soroban RPC getLatestLedger response did not include ledgerCloseTime",
+        { code: "invalid_request", retryable: false },
+      );
+    }
+    this.latestLedgerCloseTime = result.ledgerCloseTime;
+    this.lastLedgerCloseTimeFetchMs = this.now();
+    return result.ledgerCloseTime;
+  }
+
   async getNetwork(options?: SorobanRpcCallOptions): Promise<SorobanNetworkInfo> {
     const result = await this.requestResult<SorobanNetworkInfo>("getNetwork", undefined, options);
     SorobanRpcClient.setCachedNetwork(result);
     return result;
+  }
+
+  async pollUnifiedEvents(
+    onEvents: (events: SorobanRpcEvent[]) => void,
+    options?: PollUnifiedEventsOptions,
+  ): Promise<{ cursor: string | undefined }> {
+    const signal = options?.signal;
+    let cursor = options?.cursor;
+    const pageLimit = options?.pageLimit ?? 100;
+    const maxRetries = options?.maxRetries ?? Infinity;
+    const initialBackoffMs = options?.initialBackoffMs ?? 1_000;
+    const maxBackoffMs = options?.maxBackoffMs ?? 30_000;
+
+    let attempt = 0;
+
+    while (!signal?.aborted) {
+      try {
+        const params: SorobanGetEventsParams = {
+          filters: CAP_67_TOPIC_FILTERS,
+          limit: pageLimit,
+        };
+        if (cursor !== undefined) {
+          params.cursor = cursor;
+        }
+
+        const result = await this.getEvents(params);
+
+        if (attempt > 0) {
+          options?.onRecovered?.({ attempt });
+        }
+        attempt = 0;
+
+        if (result.events.length > 0) {
+          onEvents(result.events);
+        }
+
+        if (result.cursor !== undefined) {
+          cursor = result.cursor;
+          options?.onCursor?.(cursor);
+        }
+
+        if (result.events.length < pageLimit) {
+          await sleep(2_000, signal);
+        }
+      } catch (err) {
+        if (err instanceof SorobanRpcError && err.retryable) {
+          attempt++;
+          if (attempt > maxRetries) throw err;
+
+          const delayMs =
+            err.code === "rate_limit" && err.retryAfterMs !== undefined
+              ? err.retryAfterMs
+              : fullJitterBackoffMs(attempt, initialBackoffMs, maxBackoffMs);
+
+          this.logger?.debug?.("[SorobanRpcClient] unified stream backoff", {
+            attempt,
+            delayMs,
+            code: err.code,
+          });
+          options?.onRetry?.({ attempt, delayMs, rateLimited: err.code === "rate_limit" });
+
+          await sleep(delayMs, signal);
+        } else if (isAbortError(err)) {
+          return { cursor };
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return { cursor };
   }
 }

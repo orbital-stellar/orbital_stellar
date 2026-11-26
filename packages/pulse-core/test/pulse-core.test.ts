@@ -40,6 +40,10 @@ vi.mock("@stellar/stellar-sdk", () => {
 
     operations() {
       return {
+        // The engine asks Horizon for join=transactions; the double mirrors that.
+        join() {
+          return this;
+        },
         cursor() {
           return {
             stream(handlers: StreamHandlers) {
@@ -2253,6 +2257,14 @@ describe("pulse-core EventEngine", () => {
           case "trustline.authorized":
           case "trustline.deauthorized": {
             const _raw: RawHorizonAllowTrust | RawHorizonSetTrustLineFlags | undefined = event.raw;
+            break;
+          }
+          case "asset.clawback": {
+            const _raw = event.raw;
+            break;
+          }
+          case "fee.incurred": {
+            const _raw = event.raw;
             break;
           }
           case "contract.emitted": {

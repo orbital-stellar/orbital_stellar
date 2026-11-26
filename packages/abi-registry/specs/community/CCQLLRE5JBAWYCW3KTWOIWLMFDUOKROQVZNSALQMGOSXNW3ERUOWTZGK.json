@@ -1,0 +1,1669 @@
+{
+  "contractId": "CCQLLRE5JBAWYCW3KTWOIWLMFDUOKROQVZNSALQMGOSXNW3ERUOWTZGK",
+  "description": "LayerZero V2 endpoint on Stellar mainnet (endpoint id 30600): the contract every LayerZero message on Stellar is sent and received through, USDT0 transfers included.",
+  "events": [
+    {
+      "data": [
+        { "name": "encoded_packet", "type": "bytes" },
+        { "name": "options", "type": "bytes" },
+        { "name": "send_library", "type": "address" }
+      ],
+      "name": "PacketSent",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"packet_sent\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "payload_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "name": "PacketVerified",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"packet_verified\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" }
+      ]
+    },
+    {
+      "data": [],
+      "name": "PacketDelivered",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"packet_delivered\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" }
+      ]
+    },
+    {
+      "data": [
+        { "name": "gas", "type": "i128" },
+        { "name": "value", "type": "i128" },
+        { "name": "message", "type": "bytes" },
+        { "name": "extra_data", "type": "bytes" },
+        { "name": "reason", "type": "bytes" }
+      ],
+      "name": "LzReceiveAlert",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"lz_receive_alert\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "receiver", "type": "address" },
+        { "name": "executor", "type": "address" },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } }
+      ]
+    },
+    {
+      "data": [{ "name": "zro", "type": "address" }],
+      "name": "ZroSet",
+      "topics": [
+        { "doc": "Fixed prefix topic, always \"zro_set\".", "name": "event_name", "type": "symbol" }
+      ]
+    },
+    {
+      "data": [{ "name": "delegate", "type": { "inner": "address", "type": "option" } }],
+      "name": "DelegateSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"delegate_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "oapp", "type": "address" }
+      ]
+    },
+    {
+      "data": [],
+      "name": "InboundNonceSkipped",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"inbound_nonce_skipped\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "nonce", "type": "u64" }
+      ]
+    },
+    {
+      "data": [
+        {
+          "name": "payload_hash",
+          "type": { "inner": { "size": 32, "type": "bytes_n" }, "type": "option" }
+        }
+      ],
+      "name": "PacketNilified",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"packet_nilified\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "nonce", "type": "u64" }
+      ]
+    },
+    {
+      "data": [{ "name": "payload_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "name": "PacketBurnt",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"packet_burnt\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "nonce", "type": "u64" }
+      ]
+    },
+    {
+      "data": [{ "name": "new_lib", "type": "address" }],
+      "name": "LibraryRegistered",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"library_registered\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "new_lib", "type": "address" }],
+      "name": "DefaultSendLibrarySet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"default_send_library_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "dst_eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [{ "name": "new_lib", "type": "address" }],
+      "name": "DefaultReceiveLibrarySet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"default_receive_library_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "src_eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [
+        {
+          "name": "timeout",
+          "type": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+        }
+      ],
+      "name": "DefaultReceiveLibTimeoutSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"default_receive_lib_timeout_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "src_eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [{ "name": "new_lib", "type": { "inner": "address", "type": "option" } }],
+      "name": "SendLibrarySet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"send_library_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "sender", "type": "address" },
+        { "name": "dst_eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [{ "name": "new_lib", "type": { "inner": "address", "type": "option" } }],
+      "name": "ReceiveLibrarySet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"receive_library_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [
+        {
+          "name": "timeout",
+          "type": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+        }
+      ],
+      "name": "ReceiveLibraryTimeoutSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"receive_library_timeout_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "receiver", "type": "address" },
+        { "name": "eid", "type": "u32" }
+      ]
+    },
+    {
+      "data": [{ "name": "message", "type": "bytes" }],
+      "name": "ComposeSent",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"compose_sent\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" }
+      ]
+    },
+    {
+      "data": [],
+      "name": "ComposeDelivered",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"compose_delivered\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" }
+      ]
+    },
+    {
+      "data": [
+        { "name": "gas", "type": "i128" },
+        { "name": "value", "type": "i128" },
+        { "name": "message", "type": "bytes" },
+        { "name": "extra_data", "type": "bytes" },
+        { "name": "reason", "type": "bytes" }
+      ],
+      "name": "LzComposeAlert",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"lz_compose_alert\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "executor", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" }
+      ]
+    },
+    {
+      "data": [{ "name": "active", "type": "bool" }],
+      "doc": "Event emitted when a signer is added or removed.",
+      "name": "SignerSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"signer_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "signer", "type": { "size": 20, "type": "bytes_n" } }
+      ]
+    },
+    {
+      "data": [{ "name": "threshold", "type": "u32" }],
+      "doc": "Event emitted when the signature threshold is changed.",
+      "name": "ThresholdSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"threshold_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [
+        { "name": "old_owner", "type": "address" },
+        { "name": "new_owner", "type": "address" }
+      ],
+      "doc": "Event emitted when ownership is transferred (both single-step and two-step completion).",
+      "name": "OwnershipTransferred",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_transferred\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [
+        { "name": "old_owner", "type": "address" },
+        { "name": "new_owner", "type": "address" },
+        { "name": "ttl", "type": "u32" }
+      ],
+      "doc": "Event emitted when a 2-step ownership transfer is proposed.",
+      "name": "OwnershipTransferring",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_transferring\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [
+        { "name": "owner", "type": "address" },
+        { "name": "cancelled_pending_owner", "type": "address" }
+      ],
+      "doc": "Event emitted when a 2-step ownership transfer is cancelled.",
+      "name": "OwnershipTransferCancelled",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_transfer_cancelled\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "old_owner", "type": "address" }],
+      "doc": "Event emitted when ownership is renounced.",
+      "name": "OwnershipRenounced",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_renounced\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "caller", "type": "address" }],
+      "doc": "Event emitted when a role is granted.",
+      "name": "RoleGranted",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"role_granted\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "role", "type": "symbol" },
+        { "name": "account", "type": "address" }
+      ]
+    },
+    {
+      "data": [{ "name": "caller", "type": "address" }],
+      "doc": "Event emitted when a role is revoked.",
+      "name": "RoleRevoked",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"role_revoked\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "role", "type": "symbol" },
+        { "name": "account", "type": "address" }
+      ]
+    },
+    {
+      "data": [
+        { "name": "previous_admin_role", "type": { "inner": "symbol", "type": "option" } },
+        { "name": "new_admin_role", "type": { "inner": "symbol", "type": "option" } }
+      ],
+      "doc": "Event emitted when a role admin is changed.",
+      "name": "RoleAdminChanged",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"role_admin_changed\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "role", "type": "symbol" }
+      ]
+    },
+    {
+      "data": [
+        {
+          "name": "instance",
+          "type": { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" }
+        },
+        {
+          "name": "persistent",
+          "type": { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" }
+        }
+      ],
+      "doc": "Event emitted when TTL configs are set.",
+      "name": "TtlConfigsSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ttl_configs_set\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [],
+      "doc": "Event emitted when TTL configs are frozen.",
+      "name": "TtlConfigsFrozen",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ttl_configs_frozen\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "doc": "Sends a composed message from an OApp to a composer.\n\nThe composer MUST assert the sender because anyone can send compose msg with this function.\nWith the same GUID, the OApp can send compose to multiple composers at the same time.",
+      "name": "send_compose",
+      "params": [
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" },
+        { "name": "message", "type": "bytes" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Clears a composed message by the composer.\n\nThis is a PULL mode versus the PUSH mode of `lz_compose`.",
+      "name": "clear_compose",
+      "params": [
+        { "name": "composer", "type": "address" },
+        { "name": "from", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" },
+        { "name": "message", "type": "bytes" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Emits an alert event when `lz_compose` execution fails.\n\nCalled by the executor to notify about failed compose message delivery attempts.",
+      "name": "lz_compose_alert",
+      "params": [
+        { "name": "executor", "type": "address" },
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" },
+        { "name": "gas", "type": "i128" },
+        { "name": "value", "type": "i128" },
+        { "name": "message", "type": "bytes" },
+        { "name": "extra_data", "type": "bytes" },
+        { "name": "reason", "type": "bytes" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Returns the stored hash for a composed message, or `None` if not queued.",
+      "name": "compose_queue",
+      "params": [
+        { "name": "from", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "index", "type": "u32" }
+      ],
+      "returns": { "inner": { "size": 32, "type": "bytes_n" }, "type": "option" }
+    },
+    {
+      "doc": "Skips the next expected inbound nonce without verifying.\n\nThe nonce to skip must be the next expected nonce.",
+      "name": "skip",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "nonce", "type": "u64" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Marks a packet as verified, but disallows execution until it is re-verified.\n\nRequires the payload hash not been executed.",
+      "name": "nilify",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "nonce", "type": "u64" },
+        {
+          "name": "payload_hash",
+          "type": { "inner": { "size": 32, "type": "bytes_n" }, "type": "option" }
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Marks a nonce as unexecutable and un-verifiable. The nonce can never be re-verified or executed.",
+      "name": "burn",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "nonce", "type": "u64" },
+        { "name": "payload_hash", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Generates the next GUID for an outbound packet.",
+      "name": "next_guid",
+      "params": [
+        { "name": "sender", "type": "address" },
+        { "name": "dst_eid", "type": "u32" },
+        { "name": "receiver", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": { "size": 32, "type": "bytes_n" }
+    },
+    {
+      "doc": "Returns the current outbound nonce for a specific destination.",
+      "name": "outbound_nonce",
+      "params": [
+        { "name": "sender", "type": "address" },
+        { "name": "dst_eid", "type": "u32" },
+        { "name": "receiver", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": "u64"
+    },
+    {
+      "doc": "Returns the max index of the longest gapless sequence of verified message nonces.\n\nThe uninitialized value is 0. The first nonce is always 1.\n\nNote: OApp explicitly skipped nonces count as \"verified\" for these purposes.",
+      "name": "inbound_nonce",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": "u64"
+    },
+    {
+      "doc": "Returns the pending inbound nonces for a specific path.",
+      "name": "pending_inbound_nonces",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": { "item": "u64", "type": "vec" }
+    },
+    {
+      "doc": "Returns the payload hash for a specific inbound nonce.",
+      "name": "inbound_payload_hash",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "sender", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "nonce", "type": "u64" }
+      ],
+      "returns": { "inner": { "size": 32, "type": "bytes_n" }, "type": "option" }
+    },
+    {
+      "doc": "Registers a new message library with the endpoint.",
+      "name": "register_library",
+      "params": [{ "name": "new_lib", "type": "address" }],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets the default send library for a destination endpoint.",
+      "name": "set_default_send_library",
+      "params": [
+        { "name": "dst_eid", "type": "u32" },
+        { "name": "new_lib", "type": "address" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets the default receive library for a source endpoint.\n\nIf a grace period is provided and there was a previous library, the old library\nremains valid until the grace period expires.",
+      "name": "set_default_receive_library",
+      "params": [
+        { "name": "src_eid", "type": "u32" },
+        { "name": "new_lib", "type": "address" },
+        { "name": "grace_period", "type": "u64" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets or removes the default receive library timeout for a source endpoint.\n\nIf a timeout is provided, it must be valid and not expired. If no timeout is provided,\nthe default receive library timeout is removed.",
+      "name": "set_default_receive_lib_timeout",
+      "params": [
+        { "name": "src_eid", "type": "u32" },
+        {
+          "name": "timeout",
+          "type": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets or removes a custom send library for an OApp to a specific destination endpoint.",
+      "name": "set_send_library",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "sender", "type": "address" },
+        { "name": "dst_eid", "type": "u32" },
+        { "name": "new_lib", "type": { "inner": "address", "type": "option" } }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets or removes a custom receive library for an OApp to a specific source endpoint.\n\nIf a grace period is provided and there was a previous library, the old library\nremains valid until the grace period expires.",
+      "name": "set_receive_library",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "new_lib", "type": { "inner": "address", "type": "option" } },
+        { "name": "grace_period", "type": "u64" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets or removes the custom receive library timeout for an OApp.\n\nAllows an OApp to extend or remove the validity period of a previously set library\nafter switching to a new one.",
+      "name": "set_receive_library_timeout",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        {
+          "name": "timeout",
+          "type": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets the configuration for a message library.\n\nRequires the caller to be the OApp or its delegate and the library to be registered.",
+      "name": "set_config",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "oapp", "type": "address" },
+        { "name": "lib", "type": "address" },
+        {
+          "name": "params",
+          "type": { "item": { "name": "SetConfigParam", "type": "named" }, "type": "vec" }
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Checks if a message library is registered.",
+      "name": "is_registered_library",
+      "params": [{ "name": "lib", "type": "address" }],
+      "returns": "bool"
+    },
+    {
+      "doc": "Returns the index of a message library.",
+      "name": "get_library_index",
+      "params": [{ "name": "lib", "type": "address" }],
+      "returns": { "inner": "u32", "type": "option" }
+    },
+    {
+      "doc": "Returns the number of registered message libraries.",
+      "name": "registered_libraries_count",
+      "params": [],
+      "returns": "u32"
+    },
+    {
+      "doc": "Returns a list of registered message libraries within the specified range.",
+      "name": "get_registered_libraries",
+      "params": [
+        { "name": "start", "type": "u32" },
+        { "name": "max_count", "type": "u32" }
+      ],
+      "returns": { "item": "address", "type": "vec" }
+    },
+    {
+      "doc": "Checks if an endpoint ID is supported.\nReturns true only if both the default send/receive libraries are set for the given eid",
+      "name": "is_supported_eid",
+      "params": [{ "name": "eid", "type": "u32" }],
+      "returns": "bool"
+    },
+    {
+      "doc": "Returns the default send library for a destination endpoint.",
+      "name": "default_send_library",
+      "params": [{ "name": "dst_eid", "type": "u32" }],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "doc": "Returns the default receive library for a source endpoint.",
+      "name": "default_receive_library",
+      "params": [{ "name": "src_eid", "type": "u32" }],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "doc": "Returns the default receive library timeout for a source endpoint.",
+      "name": "default_receive_library_timeout",
+      "params": [{ "name": "src_eid", "type": "u32" }],
+      "returns": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+    },
+    {
+      "doc": "Returns the effective send library for an OApp and destination endpoint.",
+      "name": "get_send_library",
+      "params": [
+        { "name": "sender", "type": "address" },
+        { "name": "dst_eid", "type": "u32" }
+      ],
+      "returns": { "name": "ResolvedLibrary", "type": "named" }
+    },
+    {
+      "doc": "Returns the effective receive library for an OApp and source endpoint.",
+      "name": "get_receive_library",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" }
+      ],
+      "returns": { "name": "ResolvedLibrary", "type": "named" }
+    },
+    {
+      "doc": "Returns the receive library timeout for an OApp and source endpoint.",
+      "name": "receive_library_timeout",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" }
+      ],
+      "returns": { "inner": { "name": "Timeout", "type": "named" }, "type": "option" }
+    },
+    {
+      "doc": "Checks if a receive library is valid for an OApp and source endpoint.",
+      "name": "is_valid_receive_library",
+      "params": [
+        { "name": "receiver", "type": "address" },
+        { "name": "src_eid", "type": "u32" },
+        { "name": "actual_lib", "type": "address" }
+      ],
+      "returns": "bool"
+    },
+    {
+      "doc": "Returns the configuration for a message library for a specific endpoint ID and configuration type.",
+      "name": "get_config",
+      "params": [
+        { "name": "oapp", "type": "address" },
+        { "name": "lib", "type": "address" },
+        { "name": "eid", "type": "u32" },
+        { "name": "config_type", "type": "u32" }
+      ],
+      "returns": "bytes"
+    },
+    {
+      "doc": "Quotes the messaging fee for sending a cross-chain message.",
+      "name": "quote",
+      "params": [
+        { "name": "sender", "type": "address" },
+        { "name": "params", "type": { "name": "MessagingParams", "type": "named" } }
+      ],
+      "returns": { "name": "MessagingFee", "type": "named" }
+    },
+    {
+      "doc": "Sends a cross-chain message to a destination endpoint.\n\nOApp sender needs to transfer the fees to the endpoint before sending the message",
+      "name": "send",
+      "params": [
+        { "name": "sender", "type": "address" },
+        { "name": "params", "type": { "name": "MessagingParams", "type": "named" } },
+        { "name": "refund_address", "type": "address" }
+      ],
+      "returns": { "name": "MessagingReceipt", "type": "named" }
+    },
+    {
+      "doc": "Verifies an inbound cross-chain message from a configured receive library.",
+      "name": "verify",
+      "params": [
+        { "name": "receive_lib", "type": "address" },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "payload_hash", "type": { "size": 32, "type": "bytes_n" } }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Clears a verified message from the endpoint.\n\nThis is a PULL mode versus the PUSH mode of `lz_receive`.",
+      "name": "clear",
+      "params": [
+        { "name": "caller", "type": "address" },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "message", "type": "bytes" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Emits an alert event when `lz_receive` execution fails.\n\nCalled by the executor to notify about failed message delivery attempts.",
+      "name": "lz_receive_alert",
+      "params": [
+        { "name": "executor", "type": "address" },
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" },
+        { "name": "guid", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "gas", "type": "i128" },
+        { "name": "value", "type": "i128" },
+        { "name": "message", "type": "bytes" },
+        { "name": "extra_data", "type": "bytes" },
+        { "name": "reason", "type": "bytes" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets the ZRO token address for fee payments.",
+      "name": "set_zro",
+      "params": [{ "name": "zro", "type": "address" }],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets or removes a delegate address that can act on behalf of the OApp.",
+      "name": "set_delegate",
+      "params": [
+        { "name": "oapp", "type": "address" },
+        { "name": "new_delegate", "type": { "inner": "address", "type": "option" } }
+      ],
+      "returns": "void"
+    },
+    { "doc": "Returns the endpoint ID.", "name": "eid", "params": [], "returns": "u32" },
+    {
+      "doc": "Checks if a messaging path can be/has been initialized for the given origin and receiver.",
+      "name": "initializable",
+      "params": [
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" }
+      ],
+      "returns": "bool"
+    },
+    {
+      "doc": "Checks if a message can be verified for the given origin and receiver.",
+      "name": "verifiable",
+      "params": [
+        { "name": "origin", "type": { "name": "Origin", "type": "named" } },
+        { "name": "receiver", "type": "address" }
+      ],
+      "returns": "bool"
+    },
+    {
+      "doc": "Returns the native token address used for fee payments.",
+      "name": "native_token",
+      "params": [],
+      "returns": "address"
+    },
+    {
+      "doc": "Returns the ZRO token address if set.",
+      "name": "zro",
+      "params": [],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "doc": "Returns the delegate address for an OApp if set.",
+      "name": "delegate",
+      "params": [{ "name": "oapp", "type": "address" }],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "name": "__constructor",
+      "params": [
+        { "name": "owner", "type": "address" },
+        { "name": "eid", "type": "u32" },
+        { "name": "native_token", "type": "address" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Recovers tokens sent to this contract by mistake.\n\n# Arguments\n* `token` - The token address to recover\n* `to` - The address to send the token to\n* `amount` - The amount to send",
+      "name": "recover_token",
+      "params": [
+        { "name": "token", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": "void"
+    },
+    { "name": "authorizer", "params": [], "returns": { "inner": "address", "type": "option" } },
+    {
+      "doc": "Returns the current owner address, or None if no owner is set.",
+      "name": "owner",
+      "params": [],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "doc": "Returns the pending owner address for 2-step transfer, or None if no transfer is pending.",
+      "name": "pending_owner",
+      "params": [],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "doc": "Transfers ownership immediately to a new address.\n\nUse with caution - if you transfer to a wrong address, ownership is lost forever.\nConsider using `begin_ownership_transfer` instead.\n\n# Panics\n- `OwnerNotSet` if no owner is currently set\n- `TransferInProgress` if a 2-step transfer is in progress",
+      "name": "transfer_ownership",
+      "params": [{ "name": "new_owner", "type": "address" }],
+      "returns": "void"
+    },
+    {
+      "doc": "Begins an ownership transfer to a new address.\n\nThe new owner must call `accept_ownership()` within `ttl` ledgers\nto complete the transfer. The pending transfer will automatically expire after.\n\n# Arguments\n- `new_owner` - The proposed new owner\n- `ttl` - Number of ledgers the new owner has to accept.\nUse `0` to cancel a pending transfer (new_owner must match pending).\n\n# Panics\n- `OwnerNotSet` if no owner is currently set\n- `NoPendingTransfer` when cancelling and no pending transfer exists\n- `InvalidTtl` if ttl exceeds max TTL\n- `InvalidPendingOwner` when cancelling with wrong new_owner address",
+      "name": "begin_ownership_transfer",
+      "params": [
+        { "name": "new_owner", "type": "address" },
+        { "name": "ttl", "type": "u32" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Accepts a pending 2-step ownership transfer.\n\nMust be called by the pending owner before the TTL expires.\n\n# Panics\n- `NoPendingTransfer` if there is no pending transfer (or it expired)",
+      "name": "accept_ownership",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "doc": "Permanently renounces ownership.\n\n# Panics\n- `OwnerNotSet` if no owner is currently set\n- `TransferInProgress` if a 2-step transfer is in progress (cancel it first)",
+      "name": "renounce_ownership",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "doc": "Extends the instance TTL.\n\n# Arguments\n\n* `threshold` - The threshold to extend the TTL (if current TTL is below this, extend).\n* `extend_to` - The TTL to extend to.",
+      "name": "extend_instance_ttl",
+      "params": [
+        { "name": "threshold", "type": "u32" },
+        { "name": "extend_to", "type": "u32" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Sets TTL configs for instance and persistent storage.\n\n- `None` values remove the corresponding config (disables auto-extension for that type)\n- Validates that `threshold <= extend_to <= MAX_TTL`\n\n# Arguments\n- `instance` - TTL config for instance storage\n- `persistent` - TTL config for persistent storage\n\n# Panics\n- `TtlConfigFrozen` if configs are frozen\n- `InvalidTtlConfig` if validation fails",
+      "name": "set_ttl_configs",
+      "params": [
+        {
+          "name": "instance",
+          "type": { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" }
+        },
+        {
+          "name": "persistent",
+          "type": { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" }
+        }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Returns the current TTL configs as (instance_config, persistent_config).",
+      "name": "ttl_configs",
+      "params": [],
+      "returns": {
+        "elements": [
+          { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" },
+          { "inner": { "name": "TtlConfig", "type": "named" }, "type": "option" }
+        ],
+        "type": "tuple"
+      }
+    },
+    {
+      "doc": "Permanently freezes TTL configs, preventing any future modifications.\n\nThis is irreversible and provides immutability guarantees to users.\nEmits `TtlConfigsFrozen` event.\n\n# Panics\n- `TtlConfigAlreadyFrozen` if already frozen",
+      "name": "freeze_ttl_configs",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "doc": "Returns whether TTL configs are frozen.",
+      "name": "is_ttl_configs_frozen",
+      "params": [],
+      "returns": "bool"
+    }
+  ],
+  "name": "LayerZero EndpointV2",
+  "network": "mainnet",
+  "types": {
+    "AuthError": {
+      "doc": "AuthError: 1070-1079",
+      "kind": "enum",
+      "name": "AuthError",
+      "variants": [{ "discriminant": 1070, "name": "AuthorizerNotFound" }]
+    },
+    "BufferReaderError": {
+      "doc": "BufferReaderError: 1000-1009",
+      "kind": "enum",
+      "name": "BufferReaderError",
+      "variants": [
+        { "discriminant": 1000, "name": "InvalidLength" },
+        { "discriminant": 1001, "name": "InvalidAddressPayload" }
+      ]
+    },
+    "BufferWriterError": {
+      "doc": "BufferWriterError: 1010-1019",
+      "kind": "enum",
+      "name": "BufferWriterError",
+      "variants": [{ "discriminant": 1010, "name": "InvalidAddressPayload" }]
+    },
+    "BytesExtError": {
+      "doc": "BytesExtError: 1040-1049",
+      "kind": "enum",
+      "name": "BytesExtError",
+      "variants": [{ "discriminant": 1040, "name": "LengthMismatch" }]
+    },
+    "EndpointError": {
+      "kind": "enum",
+      "name": "EndpointError",
+      "variants": [
+        {
+          "discriminant": 1,
+          "doc": "Library is already registered with the endpoint",
+          "name": "AlreadyRegistered"
+        },
+        {
+          "discriminant": 2,
+          "doc": "Compose message already exists for this GUID and index",
+          "name": "ComposeExists"
+        },
+        {
+          "discriminant": 3,
+          "doc": "Compose message not found for the given GUID and index",
+          "name": "ComposeNotFound"
+        },
+        {
+          "discriminant": 4,
+          "doc": "Default receive library is not set for the source endpoint",
+          "name": "DefaultReceiveLibUnavailable"
+        },
+        {
+          "discriminant": 5,
+          "doc": "Default send library is not set for the destination endpoint",
+          "name": "DefaultSendLibUnavailable"
+        },
+        {
+          "discriminant": 6,
+          "doc": "Supplied native token fee is less than required",
+          "name": "InsufficientNativeFee"
+        },
+        {
+          "discriminant": 7,
+          "doc": "Supplied ZRO token fee is less than required",
+          "name": "InsufficientZroFee"
+        },
+        {
+          "discriminant": 8,
+          "doc": "Timeout expiry is invalid (already expired)",
+          "name": "InvalidExpiry"
+        },
+        { "discriminant": 9, "doc": "Amount is invalid (negative)", "name": "InvalidAmount" },
+        {
+          "discriminant": 10,
+          "doc": "Compose index exceeds maximum allowed value",
+          "name": "InvalidIndex"
+        },
+        {
+          "discriminant": 11,
+          "doc": "Nonce is invalid for the requested operation",
+          "name": "InvalidNonce"
+        },
+        {
+          "discriminant": 12,
+          "doc": "Payload hash is invalid (empty hash not allowed)",
+          "name": "InvalidPayloadHash"
+        },
+        {
+          "discriminant": 13,
+          "doc": "Receive library is not valid for the receiver and source endpoint",
+          "name": "InvalidReceiveLibrary"
+        },
+        {
+          "discriminant": 14,
+          "doc": "Operation requires a non-default (custom) library",
+          "name": "OnlyNonDefaultLib"
+        },
+        {
+          "discriminant": 15,
+          "doc": "Library must support receiving messages",
+          "name": "OnlyReceiveLib"
+        },
+        {
+          "discriminant": 16,
+          "doc": "Library must be registered with the endpoint",
+          "name": "OnlyRegisteredLib"
+        },
+        {
+          "discriminant": 17,
+          "doc": "Library must support sending messages",
+          "name": "OnlySendLib"
+        },
+        {
+          "discriminant": 18,
+          "doc": "Messaging path cannot be initialized for the given origin",
+          "name": "PathNotInitializable"
+        },
+        {
+          "discriminant": 19,
+          "doc": "Message cannot be verified for the given origin",
+          "name": "PathNotVerifiable"
+        },
+        {
+          "discriminant": 20,
+          "doc": "Payload hash does not match the stored hash",
+          "name": "PayloadHashNotFound"
+        },
+        {
+          "discriminant": 21,
+          "doc": "New value is the same as existing value",
+          "name": "SameValue"
+        },
+        {
+          "discriminant": 22,
+          "doc": "Caller is not authorized (not OApp or delegate)",
+          "name": "Unauthorized"
+        },
+        {
+          "discriminant": 23,
+          "doc": "Endpoint ID is not supported by the library",
+          "name": "UnsupportedEid"
+        },
+        {
+          "discriminant": 24,
+          "doc": "ZRO fee must be greater than zero when pay_in_zro is true",
+          "name": "ZeroZroFee"
+        },
+        { "discriminant": 25, "doc": "ZRO token address is not set", "name": "ZroUnavailable" }
+      ]
+    },
+    "EndpointStorage": {
+      "cases": [
+        { "fields": [], "name": "Eid" },
+        { "fields": [], "name": "NativeToken" },
+        { "fields": [], "name": "Zro" },
+        { "fields": [{ "name": "_0", "type": "address" }], "name": "Delegate" },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" },
+            { "name": "_2", "type": { "size": 32, "type": "bytes_n" } }
+          ],
+          "name": "PendingInboundNonces"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" },
+            { "name": "_2", "type": { "size": 32, "type": "bytes_n" } }
+          ],
+          "name": "InboundNonce"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" },
+            { "name": "_2", "type": { "size": 32, "type": "bytes_n" } },
+            { "name": "_3", "type": "u64" }
+          ],
+          "name": "InboundPayloadHash"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" },
+            { "name": "_2", "type": { "size": 32, "type": "bytes_n" } }
+          ],
+          "name": "OutboundNonce"
+        },
+        { "fields": [], "name": "RegisteredLibrariesCount" },
+        { "fields": [{ "name": "_0", "type": "address" }], "name": "LibraryToIndex" },
+        { "fields": [{ "name": "_0", "type": "u32" }], "name": "IndexToLibrary" },
+        { "fields": [{ "name": "_0", "type": "u32" }], "name": "DefaultSendLibrary" },
+        { "fields": [{ "name": "_0", "type": "u32" }], "name": "DefaultReceiveLibrary" },
+        { "fields": [{ "name": "_0", "type": "u32" }], "name": "DefaultReceiveLibraryTimeout" },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" }
+          ],
+          "name": "SendLibrary"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" }
+          ],
+          "name": "ReceiveLibrary"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "u32" }
+          ],
+          "name": "ReceiveLibraryTimeout"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "address" },
+            { "name": "_1", "type": "address" },
+            { "name": "_2", "type": { "size": 32, "type": "bytes_n" } },
+            { "name": "_3", "type": "u32" }
+          ],
+          "name": "ComposeQueue"
+        }
+      ],
+      "kind": "union",
+      "name": "EndpointStorage"
+    },
+    "FeeRecipient": {
+      "doc": "A fee recipient with the amount to be paid.",
+      "fields": [
+        { "doc": "Amount of fee to pay.", "name": "amount", "type": "i128" },
+        { "doc": "The address to send the fee to.", "name": "to", "type": "address" }
+      ],
+      "kind": "struct",
+      "name": "FeeRecipient"
+    },
+    "FeesAndPacket": {
+      "doc": "Result of send operation containing fees and encoded packet.",
+      "fields": [
+        {
+          "doc": "The encoded packet ready for transmission.",
+          "name": "encoded_packet",
+          "type": "bytes"
+        },
+        {
+          "doc": "List of native token fee recipients (executor, DVNs, treasury).",
+          "name": "native_fee_recipients",
+          "type": { "item": { "name": "FeeRecipient", "type": "named" }, "type": "vec" }
+        },
+        {
+          "doc": "List of ZRO token fee recipients (treasury).",
+          "name": "zro_fee_recipients",
+          "type": { "item": { "name": "FeeRecipient", "type": "named" }, "type": "vec" }
+        }
+      ],
+      "kind": "struct",
+      "name": "FeesAndPacket"
+    },
+    "MessageLibType": {
+      "cases": [
+        { "doc": "Supports only sending messages.", "fields": [], "name": "Send" },
+        { "doc": "Supports only receiving messages.", "fields": [], "name": "Receive" },
+        {
+          "doc": "Supports both sending and receiving messages.",
+          "fields": [],
+          "name": "SendAndReceive"
+        }
+      ],
+      "doc": "Type of message library indicating supported operations.",
+      "kind": "union",
+      "name": "MessageLibType"
+    },
+    "MessageLibVersion": {
+      "doc": "Version information for a message library.\n\nNote: `minor` and `endpoint_version` use `u32` instead of `u8` because Stellar does not\nsupport `u8` types in contract interface functions.",
+      "fields": [
+        {
+          "doc": "Endpoint version (should not exceed u8::MAX = 255).",
+          "name": "endpoint_version",
+          "type": "u32"
+        },
+        { "doc": "Major version number.", "name": "major", "type": "u64" },
+        {
+          "doc": "Minor version number (should not exceed u8::MAX = 255).",
+          "name": "minor",
+          "type": "u32"
+        }
+      ],
+      "kind": "struct",
+      "name": "MessageLibVersion"
+    },
+    "MessagingFee": {
+      "doc": "Fee structure for cross-chain messaging.",
+      "fields": [
+        { "doc": "Fee paid in native token (XLM).", "name": "native_fee", "type": "i128" },
+        { "doc": "Fee paid in ZRO token (LayerZero token).", "name": "zro_fee", "type": "i128" }
+      ],
+      "kind": "struct",
+      "name": "MessagingFee"
+    },
+    "MessagingParams": {
+      "doc": "Parameters for sending a cross-chain message.",
+      "fields": [
+        { "doc": "Destination endpoint ID (chain identifier).", "name": "dst_eid", "type": "u32" },
+        { "doc": "The message payload to send.", "name": "message", "type": "bytes" },
+        { "doc": "Encoded executor and DVN options.", "name": "options", "type": "bytes" },
+        {
+          "doc": "Whether to pay fees in ZRO token instead of native token.",
+          "name": "pay_in_zro",
+          "type": "bool"
+        },
+        {
+          "doc": "Receiver address on the destination chain (32 bytes).",
+          "name": "receiver",
+          "type": { "size": 32, "type": "bytes_n" }
+        }
+      ],
+      "kind": "struct",
+      "name": "MessagingParams"
+    },
+    "MessagingReceipt": {
+      "doc": "Receipt returned after successfully sending a cross-chain message.",
+      "fields": [
+        {
+          "doc": "The fees charged for sending the message.",
+          "name": "fee",
+          "type": { "name": "MessagingFee", "type": "named" }
+        },
+        {
+          "doc": "Globally unique identifier for the message.",
+          "name": "guid",
+          "type": { "size": 32, "type": "bytes_n" }
+        },
+        { "doc": "The outbound nonce for this pathway.", "name": "nonce", "type": "u64" }
+      ],
+      "kind": "struct",
+      "name": "MessagingReceipt"
+    },
+    "MultiSigError": {
+      "doc": "MultiSigError: 1060-1069",
+      "kind": "enum",
+      "name": "MultiSigError",
+      "variants": [
+        { "discriminant": 1060, "name": "AlreadyInitialized" },
+        { "discriminant": 1061, "name": "InvalidAuthorizer" },
+        { "discriminant": 1062, "name": "InvalidSigner" },
+        { "discriminant": 1063, "name": "SignatureError" },
+        { "discriminant": 1064, "name": "SignerAlreadyExists" },
+        { "discriminant": 1065, "name": "SignerNotFound" },
+        { "discriminant": 1066, "name": "TotalSignersLessThanThreshold" },
+        { "discriminant": 1067, "name": "UnsortedSigners" },
+        { "discriminant": 1068, "name": "ZeroThreshold" }
+      ]
+    },
+    "MultiSigStorage": {
+      "cases": [
+        { "fields": [], "name": "Signers" },
+        { "fields": [], "name": "Threshold" }
+      ],
+      "kind": "union",
+      "name": "MultiSigStorage"
+    },
+    "Origin": {
+      "doc": "Source message information identifying where a cross-chain message came from.",
+      "fields": [
+        { "doc": "Nonce for this pathway.", "name": "nonce", "type": "u64" },
+        {
+          "doc": "Sender address on the source chain (32 bytes).",
+          "name": "sender",
+          "type": { "size": 32, "type": "bytes_n" }
+        },
+        { "doc": "Source endpoint ID (chain identifier).", "name": "src_eid", "type": "u32" }
+      ],
+      "kind": "struct",
+      "name": "Origin"
+    },
+    "OutboundPacket": {
+      "doc": "Outbound packet containing all information for cross-chain transmission.",
+      "fields": [
+        { "doc": "Destination endpoint ID.", "name": "dst_eid", "type": "u32" },
+        {
+          "doc": "Globally unique identifier for this message.",
+          "name": "guid",
+          "type": { "size": 32, "type": "bytes_n" }
+        },
+        { "doc": "The message payload.", "name": "message", "type": "bytes" },
+        { "doc": "Outbound nonce for this pathway.", "name": "nonce", "type": "u64" },
+        {
+          "doc": "Receiver address on destination chain (32 bytes).",
+          "name": "receiver",
+          "type": { "size": 32, "type": "bytes_n" }
+        },
+        { "doc": "Sender address on source chain.", "name": "sender", "type": "address" },
+        { "doc": "Source endpoint ID.", "name": "src_eid", "type": "u32" }
+      ],
+      "kind": "struct",
+      "name": "OutboundPacket"
+    },
+    "OwnableError": {
+      "doc": "OwnableError: 1030-1039",
+      "kind": "enum",
+      "name": "OwnableError",
+      "variants": [
+        { "discriminant": 1030, "name": "InvalidAuthorizer" },
+        { "discriminant": 1031, "name": "InvalidPendingOwner" },
+        { "discriminant": 1032, "name": "InvalidTtl" },
+        { "discriminant": 1033, "name": "NoPendingTransfer" },
+        { "discriminant": 1034, "name": "OwnerAlreadySet" },
+        { "discriminant": 1035, "name": "OwnerNotSet" },
+        { "discriminant": 1036, "name": "TransferInProgress" }
+      ]
+    },
+    "OwnableStorage": {
+      "cases": [
+        { "fields": [], "name": "Owner" },
+        { "fields": [], "name": "PendingOwner" }
+      ],
+      "kind": "union",
+      "name": "OwnableStorage"
+    },
+    "RbacError": {
+      "doc": "RbacError: 1080-1089",
+      "kind": "enum",
+      "name": "RbacError",
+      "variants": [
+        { "discriminant": 1080, "name": "AdminRoleNotFound" },
+        { "discriminant": 1081, "name": "IndexOutOfBounds" },
+        { "discriminant": 1082, "name": "MaxRolesExceeded" },
+        { "discriminant": 1083, "name": "RoleIsEmpty" },
+        { "discriminant": 1084, "name": "RoleNotFound" },
+        { "discriminant": 1085, "name": "RoleNotHeld" },
+        { "discriminant": 1086, "name": "Unauthorized" }
+      ]
+    },
+    "RbacStorage": {
+      "cases": [
+        { "fields": [], "name": "ExistingRoles" },
+        {
+          "fields": [
+            { "name": "_0", "type": "symbol" },
+            { "name": "_1", "type": "u32" }
+          ],
+          "name": "RoleIndexToAccount"
+        },
+        {
+          "fields": [
+            { "name": "_0", "type": "symbol" },
+            { "name": "_1", "type": "address" }
+          ],
+          "name": "RoleAccountToIndex"
+        },
+        { "fields": [{ "name": "_0", "type": "symbol" }], "name": "RoleAccountsCount" },
+        { "fields": [{ "name": "_0", "type": "symbol" }], "name": "RoleAdmin" }
+      ],
+      "kind": "union",
+      "name": "RbacStorage"
+    },
+    "ResolvedLibrary": {
+      "doc": "Resolved library information with default status.",
+      "fields": [
+        {
+          "doc": "Whether this is the default library (true) or OApp-specific (false).",
+          "name": "is_default",
+          "type": "bool"
+        },
+        { "doc": "The resolved library address.", "name": "lib", "type": "address" }
+      ],
+      "kind": "struct",
+      "name": "ResolvedLibrary"
+    },
+    "SetConfigParam": {
+      "doc": "Parameters for setting message library configuration.",
+      "fields": [
+        { "doc": "XDR-encoded configuration data.", "name": "config", "type": "bytes" },
+        {
+          "doc": "The type of configuration (e.g., executor, ULN).",
+          "name": "config_type",
+          "type": "u32"
+        },
+        { "doc": "The endpoint ID this config applies to.", "name": "eid", "type": "u32" }
+      ],
+      "kind": "struct",
+      "name": "SetConfigParam"
+    },
+    "Timeout": {
+      "doc": "Timeout configuration for receive library transitions.",
+      "fields": [
+        {
+          "doc": "Unix timestamp in seconds when the timeout expires.",
+          "name": "expiry",
+          "type": "u64"
+        },
+        {
+          "doc": "The old library address that remains valid during the grace period.",
+          "name": "lib",
+          "type": "address"
+        }
+      ],
+      "kind": "struct",
+      "name": "Timeout"
+    },
+    "TtlConfig": {
+      "doc": "TTL configuration: threshold (when to extend) and extend_to (target TTL).",
+      "fields": [
+        { "doc": "Target TTL after extension (in ledgers).", "name": "extend_to", "type": "u32" },
+        {
+          "doc": "TTL threshold that triggers extension (in ledgers).",
+          "name": "threshold",
+          "type": "u32"
+        }
+      ],
+      "kind": "struct",
+      "name": "TtlConfig"
+    },
+    "TtlConfigStorage": {
+      "cases": [
+        { "fields": [], "name": "Frozen" },
+        { "fields": [], "name": "Instance" },
+        { "fields": [], "name": "Persistent" }
+      ],
+      "kind": "union",
+      "name": "TtlConfigStorage"
+    },
+    "TtlConfigurableError": {
+      "doc": "TtlConfigurableError: 1020-1029",
+      "kind": "enum",
+      "name": "TtlConfigurableError",
+      "variants": [
+        { "discriminant": 1020, "name": "InvalidTtlConfig" },
+        { "discriminant": 1021, "name": "TtlConfigFrozen" },
+        { "discriminant": 1022, "name": "TtlConfigAlreadyFrozen" }
+      ]
+    },
+    "UpgradeableError": {
+      "doc": "UpgradeableError: 1050-1059",
+      "kind": "enum",
+      "name": "UpgradeableError",
+      "variants": [
+        { "discriminant": 1050, "name": "InvalidMigrationData" },
+        { "discriminant": 1051, "name": "MigrationNotAllowed" }
+      ]
+    },
+    "UpgradeableStorage": {
+      "cases": [{ "fields": [], "name": "Migrating" }],
+      "kind": "union",
+      "name": "UpgradeableStorage"
+    }
+  },
+  "version": "0.0.0",
+  "xdrEntries": [
+    "AAAABQAAAAAAAAAAAAAAClBhY2tldFNlbnQAAAAAAAEAAAALcGFja2V0X3NlbnQAAAAAAwAAAAAAAAAOZW5jb2RlZF9wYWNrZXQAAAAAAA4AAAAAAAAAAAAAAAdvcHRpb25zAAAAAA4AAAAAAAAAAAAAAAxzZW5kX2xpYnJhcnkAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAADlBhY2tldFZlcmlmaWVkAAAAAAABAAAAD3BhY2tldF92ZXJpZmllZAAAAAADAAAAAAAAAAZvcmlnaW4AAAAAB9AAAAAGT3JpZ2luAAAAAAABAAAAAAAAAAhyZWNlaXZlcgAAABMAAAABAAAAAAAAAAxwYXlsb2FkX2hhc2gAAAPuAAAAIAAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAAD1BhY2tldERlbGl2ZXJlZAAAAAABAAAAEHBhY2tldF9kZWxpdmVyZWQAAAACAAAAAAAAAAZvcmlnaW4AAAAAB9AAAAAGT3JpZ2luAAAAAAABAAAAAAAAAAhyZWNlaXZlcgAAABMAAAABAAAAAg==",
+    "AAAABQAAAAAAAAAAAAAADkx6UmVjZWl2ZUFsZXJ0AAAAAAABAAAAEGx6X3JlY2VpdmVfYWxlcnQAAAAJAAAAAAAAAAhyZWNlaXZlcgAAABMAAAABAAAAAAAAAAhleGVjdXRvcgAAABMAAAABAAAAAAAAAAZvcmlnaW4AAAAAB9AAAAAGT3JpZ2luAAAAAAABAAAAAAAAAARndWlkAAAD7gAAACAAAAABAAAAAAAAAANnYXMAAAAACwAAAAAAAAAAAAAABXZhbHVlAAAAAAAACwAAAAAAAAAAAAAAB21lc3NhZ2UAAAAADgAAAAAAAAAAAAAACmV4dHJhX2RhdGEAAAAAAA4AAAAAAAAAAAAAAAZyZWFzb24AAAAAAA4AAAAAAAAAAg==",
+    "AAAABQAAAAAAAAAAAAAABlpyb1NldAAAAAAAAQAAAAd6cm9fc2V0AAAAAAEAAAAAAAAAA3pybwAAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAC0RlbGVnYXRlU2V0AAAAAAEAAAAMZGVsZWdhdGVfc2V0AAAAAgAAAAAAAAAEb2FwcAAAABMAAAABAAAAAAAAAAhkZWxlZ2F0ZQAAA+gAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAE0luYm91bmROb25jZVNraXBwZWQAAAAAAQAAABVpbmJvdW5kX25vbmNlX3NraXBwZWQAAAAAAAAEAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAABAAAAAAAAAAZzZW5kZXIAAAAAA+4AAAAgAAAAAQAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAQAAAAAAAAAFbm9uY2UAAAAAAAAGAAAAAQAAAAI=",
+    "AAAABQAAAAAAAAAAAAAADlBhY2tldE5pbGlmaWVkAAAAAAABAAAAD3BhY2tldF9uaWxpZmllZAAAAAAFAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAABAAAAAAAAAAZzZW5kZXIAAAAAA+4AAAAgAAAAAQAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAQAAAAAAAAAFbm9uY2UAAAAAAAAGAAAAAQAAAAAAAAAMcGF5bG9hZF9oYXNoAAAD6AAAA+4AAAAgAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAC1BhY2tldEJ1cm50AAAAAAEAAAAMcGFja2V0X2J1cm50AAAABQAAAAAAAAAHc3JjX2VpZAAAAAAEAAAAAQAAAAAAAAAGc2VuZGVyAAAAAAPuAAAAIAAAAAEAAAAAAAAACHJlY2VpdmVyAAAAEwAAAAEAAAAAAAAABW5vbmNlAAAAAAAABgAAAAEAAAAAAAAADHBheWxvYWRfaGFzaAAAA+4AAAAgAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAEUxpYnJhcnlSZWdpc3RlcmVkAAAAAAAAAQAAABJsaWJyYXJ5X3JlZ2lzdGVyZWQAAAAAAAEAAAAAAAAAB25ld19saWIAAAAAEwAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAAFURlZmF1bHRTZW5kTGlicmFyeVNldAAAAAAAAAEAAAAYZGVmYXVsdF9zZW5kX2xpYnJhcnlfc2V0AAAAAgAAAAAAAAAHZHN0X2VpZAAAAAAEAAAAAQAAAAAAAAAHbmV3X2xpYgAAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAGERlZmF1bHRSZWNlaXZlTGlicmFyeVNldAAAAAEAAAAbZGVmYXVsdF9yZWNlaXZlX2xpYnJhcnlfc2V0AAAAAAIAAAAAAAAAB3NyY19laWQAAAAABAAAAAEAAAAAAAAAB25ld19saWIAAAAAEwAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAAG0RlZmF1bHRSZWNlaXZlTGliVGltZW91dFNldAAAAAABAAAAH2RlZmF1bHRfcmVjZWl2ZV9saWJfdGltZW91dF9zZXQAAAAAAgAAAAAAAAAHc3JjX2VpZAAAAAAEAAAAAQAAAAAAAAAHdGltZW91dAAAAAPoAAAH0AAAAAdUaW1lb3V0AAAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAADlNlbmRMaWJyYXJ5U2V0AAAAAAABAAAAEHNlbmRfbGlicmFyeV9zZXQAAAADAAAAAAAAAAZzZW5kZXIAAAAAABMAAAABAAAAAAAAAAdkc3RfZWlkAAAAAAQAAAABAAAAAAAAAAduZXdfbGliAAAAA+gAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAAEVJlY2VpdmVMaWJyYXJ5U2V0AAAAAAAAAQAAABNyZWNlaXZlX2xpYnJhcnlfc2V0AAAAAAMAAAAAAAAACHJlY2VpdmVyAAAAEwAAAAEAAAAAAAAAB3NyY19laWQAAAAABAAAAAEAAAAAAAAAB25ld19saWIAAAAD6AAAABMAAAAAAAAAAg==",
+    "AAAABQAAAAAAAAAAAAAAGFJlY2VpdmVMaWJyYXJ5VGltZW91dFNldAAAAAEAAAAbcmVjZWl2ZV9saWJyYXJ5X3RpbWVvdXRfc2V0AAAAAAMAAAAAAAAACHJlY2VpdmVyAAAAEwAAAAEAAAAAAAAAA2VpZAAAAAAEAAAAAQAAAAAAAAAHdGltZW91dAAAAAPoAAAH0AAAAAdUaW1lb3V0AAAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAAC0NvbXBvc2VTZW50AAAAAAEAAAAMY29tcG9zZV9zZW50AAAABQAAAAAAAAAEZnJvbQAAABMAAAABAAAAAAAAAAJ0bwAAAAAAEwAAAAEAAAAAAAAABGd1aWQAAAPuAAAAIAAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAEAAAAAAAAAB21lc3NhZ2UAAAAADgAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAAEENvbXBvc2VEZWxpdmVyZWQAAAABAAAAEWNvbXBvc2VfZGVsaXZlcmVkAAAAAAAABAAAAAAAAAAEZnJvbQAAABMAAAABAAAAAAAAAAJ0bwAAAAAAEwAAAAEAAAAAAAAABGd1aWQAAAPuAAAAIAAAAAEAAAAAAAAABWluZGV4AAAAAAAABAAAAAEAAAAC",
+    "AAAABQAAAAAAAAAAAAAADkx6Q29tcG9zZUFsZXJ0AAAAAAABAAAAEGx6X2NvbXBvc2VfYWxlcnQAAAAKAAAAAAAAAARmcm9tAAAAEwAAAAEAAAAAAAAAAnRvAAAAAAATAAAAAQAAAAAAAAAIZXhlY3V0b3IAAAATAAAAAQAAAAAAAAAEZ3VpZAAAA+4AAAAgAAAAAQAAAAAAAAAFaW5kZXgAAAAAAAAEAAAAAQAAAAAAAAADZ2FzAAAAAAsAAAAAAAAAAAAAAAV2YWx1ZQAAAAAAAAsAAAAAAAAAAAAAAAdtZXNzYWdlAAAAAA4AAAAAAAAAAAAAAApleHRyYV9kYXRhAAAAAAAOAAAAAAAAAAAAAAAGcmVhc29uAAAAAAAOAAAAAAAAAAI=",
+    "AAAABAAAAAAAAAAAAAAADUVuZHBvaW50RXJyb3IAAAAAAAAZAAAAL0xpYnJhcnkgaXMgYWxyZWFkeSByZWdpc3RlcmVkIHdpdGggdGhlIGVuZHBvaW50AAAAABFBbHJlYWR5UmVnaXN0ZXJlZAAAAAAAAAEAAAA2Q29tcG9zZSBtZXNzYWdlIGFscmVhZHkgZXhpc3RzIGZvciB0aGlzIEdVSUQgYW5kIGluZGV4AAAAAAANQ29tcG9zZUV4aXN0cwAAAAAAAAIAAAA2Q29tcG9zZSBtZXNzYWdlIG5vdCBmb3VuZCBmb3IgdGhlIGdpdmVuIEdVSUQgYW5kIGluZGV4AAAAAAAPQ29tcG9zZU5vdEZvdW5kAAAAAAMAAAA6RGVmYXVsdCByZWNlaXZlIGxpYnJhcnkgaXMgbm90IHNldCBmb3IgdGhlIHNvdXJjZSBlbmRwb2ludAAAAAAAHERlZmF1bHRSZWNlaXZlTGliVW5hdmFpbGFibGUAAAAEAAAAPERlZmF1bHQgc2VuZCBsaWJyYXJ5IGlzIG5vdCBzZXQgZm9yIHRoZSBkZXN0aW5hdGlvbiBlbmRwb2ludAAAABlEZWZhdWx0U2VuZExpYlVuYXZhaWxhYmxlAAAAAAAABQAAAC9TdXBwbGllZCBuYXRpdmUgdG9rZW4gZmVlIGlzIGxlc3MgdGhhbiByZXF1aXJlZAAAAAAVSW5zdWZmaWNpZW50TmF0aXZlRmVlAAAAAAAABgAAACxTdXBwbGllZCBaUk8gdG9rZW4gZmVlIGlzIGxlc3MgdGhhbiByZXF1aXJlZAAAABJJbnN1ZmZpY2llbnRacm9GZWUAAAAAAAcAAAArVGltZW91dCBleHBpcnkgaXMgaW52YWxpZCAoYWxyZWFkeSBleHBpcmVkKQAAAAANSW52YWxpZEV4cGlyeQAAAAAAAAgAAAAcQW1vdW50IGlzIGludmFsaWQgKG5lZ2F0aXZlKQAAAA1JbnZhbGlkQW1vdW50AAAAAAAACQAAACtDb21wb3NlIGluZGV4IGV4Y2VlZHMgbWF4aW11bSBhbGxvd2VkIHZhbHVlAAAAAAxJbnZhbGlkSW5kZXgAAAAKAAAALE5vbmNlIGlzIGludmFsaWQgZm9yIHRoZSByZXF1ZXN0ZWQgb3BlcmF0aW9uAAAADEludmFsaWROb25jZQAAAAsAAAAwUGF5bG9hZCBoYXNoIGlzIGludmFsaWQgKGVtcHR5IGhhc2ggbm90IGFsbG93ZWQpAAAAEkludmFsaWRQYXlsb2FkSGFzaAAAAAAADAAAAEFSZWNlaXZlIGxpYnJhcnkgaXMgbm90IHZhbGlkIGZvciB0aGUgcmVjZWl2ZXIgYW5kIHNvdXJjZSBlbmRwb2ludAAAAAAAABVJbnZhbGlkUmVjZWl2ZUxpYnJhcnkAAAAAAAANAAAAMU9wZXJhdGlvbiByZXF1aXJlcyBhIG5vbi1kZWZhdWx0IChjdXN0b20pIGxpYnJhcnkAAAAAAAART25seU5vbkRlZmF1bHRMaWIAAAAAAAAOAAAAJ0xpYnJhcnkgbXVzdCBzdXBwb3J0IHJlY2VpdmluZyBtZXNzYWdlcwAAAAAOT25seVJlY2VpdmVMaWIAAAAAAA8AAAAsTGlicmFyeSBtdXN0IGJlIHJlZ2lzdGVyZWQgd2l0aCB0aGUgZW5kcG9pbnQAAAART25seVJlZ2lzdGVyZWRMaWIAAAAAAAAQAAAAJUxpYnJhcnkgbXVzdCBzdXBwb3J0IHNlbmRpbmcgbWVzc2FnZXMAAAAAAAALT25seVNlbmRMaWIAAAAAEQAAADlNZXNzYWdpbmcgcGF0aCBjYW5ub3QgYmUgaW5pdGlhbGl6ZWQgZm9yIHRoZSBnaXZlbiBvcmlnaW4AAAAAAAAUUGF0aE5vdEluaXRpYWxpemFibGUAAAASAAAAL01lc3NhZ2UgY2Fubm90IGJlIHZlcmlmaWVkIGZvciB0aGUgZ2l2ZW4gb3JpZ2luAAAAABFQYXRoTm90VmVyaWZpYWJsZQAAAAAAABMAAAArUGF5bG9hZCBoYXNoIGRvZXMgbm90IG1hdGNoIHRoZSBzdG9yZWQgaGFzaAAAAAATUGF5bG9hZEhhc2hOb3RGb3VuZAAAAAAUAAAAJ05ldyB2YWx1ZSBpcyB0aGUgc2FtZSBhcyBleGlzdGluZyB2YWx1ZQAAAAAJU2FtZVZhbHVlAAAAAAAAFQAAAC9DYWxsZXIgaXMgbm90IGF1dGhvcml6ZWQgKG5vdCBPQXBwIG9yIGRlbGVnYXRlKQAAAAAMVW5hdXRob3JpemVkAAAAFgAAACtFbmRwb2ludCBJRCBpcyBub3Qgc3VwcG9ydGVkIGJ5IHRoZSBsaWJyYXJ5AAAAAA5VbnN1cHBvcnRlZEVpZAAAAAAAFwAAADlaUk8gZmVlIG11c3QgYmUgZ3JlYXRlciB0aGFuIHplcm8gd2hlbiBwYXlfaW5fenJvIGlzIHRydWUAAAAAAAAKWmVyb1pyb0ZlZQAAAAAAGAAAABxaUk8gdG9rZW4gYWRkcmVzcyBpcyBub3Qgc2V0AAAADlpyb1VuYXZhaWxhYmxlAAAAAAAZ",
+    "AAAAAQAAAC1QYXJhbWV0ZXJzIGZvciBzZW5kaW5nIGEgY3Jvc3MtY2hhaW4gbWVzc2FnZS4AAAAAAAAAAAAAD01lc3NhZ2luZ1BhcmFtcwAAAAAFAAAAK0Rlc3RpbmF0aW9uIGVuZHBvaW50IElEIChjaGFpbiBpZGVudGlmaWVyKS4AAAAAB2RzdF9laWQAAAAABAAAABxUaGUgbWVzc2FnZSBwYXlsb2FkIHRvIHNlbmQuAAAAB21lc3NhZ2UAAAAADgAAACFFbmNvZGVkIGV4ZWN1dG9yIGFuZCBEVk4gb3B0aW9ucy4AAAAAAAAHb3B0aW9ucwAAAAAOAAAAOVdoZXRoZXIgdG8gcGF5IGZlZXMgaW4gWlJPIHRva2VuIGluc3RlYWQgb2YgbmF0aXZlIHRva2VuLgAAAAAAAApwYXlfaW5fenJvAAAAAAABAAAANVJlY2VpdmVyIGFkZHJlc3Mgb24gdGhlIGRlc3RpbmF0aW9uIGNoYWluICgzMiBieXRlcykuAAAAAAAACHJlY2VpdmVyAAAD7gAAACA=",
+    "AAAAAQAAAE1Tb3VyY2UgbWVzc2FnZSBpbmZvcm1hdGlvbiBpZGVudGlmeWluZyB3aGVyZSBhIGNyb3NzLWNoYWluIG1lc3NhZ2UgY2FtZSBmcm9tLgAAAAAAAAAAAAAGT3JpZ2luAAAAAAADAAAAF05vbmNlIGZvciB0aGlzIHBhdGh3YXkuAAAAAAVub25jZQAAAAAAAAYAAAAuU2VuZGVyIGFkZHJlc3Mgb24gdGhlIHNvdXJjZSBjaGFpbiAoMzIgYnl0ZXMpLgAAAAAABnNlbmRlcgAAAAAD7gAAACAAAAAmU291cmNlIGVuZHBvaW50IElEIChjaGFpbiBpZGVudGlmaWVyKS4AAAAAAAdzcmNfZWlkAAAAAAQ=",
+    "AAAAAQAAAChGZWUgc3RydWN0dXJlIGZvciBjcm9zcy1jaGFpbiBtZXNzYWdpbmcuAAAAAAAAAAxNZXNzYWdpbmdGZWUAAAACAAAAH0ZlZSBwYWlkIGluIG5hdGl2ZSB0b2tlbiAoWExNKS4AAAAACm5hdGl2ZV9mZWUAAAAAAAsAAAAoRmVlIHBhaWQgaW4gWlJPIHRva2VuIChMYXllclplcm8gdG9rZW4pLgAAAAd6cm9fZmVlAAAAAAs=",
+    "AAAAAQAAAEJSZWNlaXB0IHJldHVybmVkIGFmdGVyIHN1Y2Nlc3NmdWxseSBzZW5kaW5nIGEgY3Jvc3MtY2hhaW4gbWVzc2FnZS4AAAAAAAAAAAAQTWVzc2FnaW5nUmVjZWlwdAAAAAMAAAApVGhlIGZlZXMgY2hhcmdlZCBmb3Igc2VuZGluZyB0aGUgbWVzc2FnZS4AAAAAAAADZmVlAAAAB9AAAAAMTWVzc2FnaW5nRmVlAAAAK0dsb2JhbGx5IHVuaXF1ZSBpZGVudGlmaWVyIGZvciB0aGUgbWVzc2FnZS4AAAAABGd1aWQAAAPuAAAAIAAAACRUaGUgb3V0Ym91bmQgbm9uY2UgZm9yIHRoaXMgcGF0aHdheS4AAAAFbm9uY2UAAAAAAAAG",
+    "AAAAAgAAADhUeXBlIG9mIG1lc3NhZ2UgbGlicmFyeSBpbmRpY2F0aW5nIHN1cHBvcnRlZCBvcGVyYXRpb25zLgAAAAAAAAAOTWVzc2FnZUxpYlR5cGUAAAAAAAMAAAAAAAAAH1N1cHBvcnRzIG9ubHkgc2VuZGluZyBtZXNzYWdlcy4AAAAABFNlbmQAAAAAAAAAIVN1cHBvcnRzIG9ubHkgcmVjZWl2aW5nIG1lc3NhZ2VzLgAAAAAAAAdSZWNlaXZlAAAAAAAAAAAtU3VwcG9ydHMgYm90aCBzZW5kaW5nIGFuZCByZWNlaXZpbmcgbWVzc2FnZXMuAAAAAAAADlNlbmRBbmRSZWNlaXZlAAA=",
+    "AAAAAQAAALdWZXJzaW9uIGluZm9ybWF0aW9uIGZvciBhIG1lc3NhZ2UgbGlicmFyeS4KCk5vdGU6IGBtaW5vcmAgYW5kIGBlbmRwb2ludF92ZXJzaW9uYCB1c2UgYHUzMmAgaW5zdGVhZCBvZiBgdThgIGJlY2F1c2UgU3RlbGxhciBkb2VzIG5vdApzdXBwb3J0IGB1OGAgdHlwZXMgaW4gY29udHJhY3QgaW50ZXJmYWNlIGZ1bmN0aW9ucy4AAAAAAAAAABFNZXNzYWdlTGliVmVyc2lvbgAAAAAAAAMAAAAzRW5kcG9pbnQgdmVyc2lvbiAoc2hvdWxkIG5vdCBleGNlZWQgdTg6Ok1BWCA9IDI1NSkuAAAAABBlbmRwb2ludF92ZXJzaW9uAAAABAAAABVNYWpvciB2ZXJzaW9uIG51bWJlci4AAAAAAAAFbWFqb3IAAAAAAAAGAAAAN01pbm9yIHZlcnNpb24gbnVtYmVyIChzaG91bGQgbm90IGV4Y2VlZCB1ODo6TUFYID0gMjU1KS4AAAAABW1pbm9yAAAAAAAABA==",
+    "AAAAAQAAADZUaW1lb3V0IGNvbmZpZ3VyYXRpb24gZm9yIHJlY2VpdmUgbGlicmFyeSB0cmFuc2l0aW9ucy4AAAAAAAAAAAAHVGltZW91dAAAAAACAAAAM1VuaXggdGltZXN0YW1wIGluIHNlY29uZHMgd2hlbiB0aGUgdGltZW91dCBleHBpcmVzLgAAAAAGZXhwaXJ5AAAAAAAGAAAAQ1RoZSBvbGQgbGlicmFyeSBhZGRyZXNzIHRoYXQgcmVtYWlucyB2YWxpZCBkdXJpbmcgdGhlIGdyYWNlIHBlcmlvZC4AAAAAA2xpYgAAAAAT",
+    "AAAAAQAAADVQYXJhbWV0ZXJzIGZvciBzZXR0aW5nIG1lc3NhZ2UgbGlicmFyeSBjb25maWd1cmF0aW9uLgAAAAAAAAAAAAAOU2V0Q29uZmlnUGFyYW0AAAAAAAMAAAAfWERSLWVuY29kZWQgY29uZmlndXJhdGlvbiBkYXRhLgAAAAAGY29uZmlnAAAAAAAOAAAAMFRoZSB0eXBlIG9mIGNvbmZpZ3VyYXRpb24gKGUuZy4sIGV4ZWN1dG9yLCBVTE4pLgAAAAtjb25maWdfdHlwZQAAAAAEAAAAJ1RoZSBlbmRwb2ludCBJRCB0aGlzIGNvbmZpZyBhcHBsaWVzIHRvLgAAAAADZWlkAAAAAAQ=",
+    "AAAAAQAAADFSZXNvbHZlZCBsaWJyYXJ5IGluZm9ybWF0aW9uIHdpdGggZGVmYXVsdCBzdGF0dXMuAAAAAAAAAAAAAA9SZXNvbHZlZExpYnJhcnkAAAAAAgAAAERXaGV0aGVyIHRoaXMgaXMgdGhlIGRlZmF1bHQgbGlicmFyeSAodHJ1ZSkgb3IgT0FwcC1zcGVjaWZpYyAoZmFsc2UpLgAAAAppc19kZWZhdWx0AAAAAAABAAAAHVRoZSByZXNvbHZlZCBsaWJyYXJ5IGFkZHJlc3MuAAAAAAAAA2xpYgAAAAAT",
+    "AAAAAQAAAEhPdXRib3VuZCBwYWNrZXQgY29udGFpbmluZyBhbGwgaW5mb3JtYXRpb24gZm9yIGNyb3NzLWNoYWluIHRyYW5zbWlzc2lvbi4AAAAAAAAADk91dGJvdW5kUGFja2V0AAAAAAAHAAAAGERlc3RpbmF0aW9uIGVuZHBvaW50IElELgAAAAdkc3RfZWlkAAAAAAQAAAAsR2xvYmFsbHkgdW5pcXVlIGlkZW50aWZpZXIgZm9yIHRoaXMgbWVzc2FnZS4AAAAEZ3VpZAAAA+4AAAAgAAAAFFRoZSBtZXNzYWdlIHBheWxvYWQuAAAAB21lc3NhZ2UAAAAADgAAACBPdXRib3VuZCBub25jZSBmb3IgdGhpcyBwYXRod2F5LgAAAAVub25jZQAAAAAAAAYAAAAxUmVjZWl2ZXIgYWRkcmVzcyBvbiBkZXN0aW5hdGlvbiBjaGFpbiAoMzIgYnl0ZXMpLgAAAAAAAAhyZWNlaXZlcgAAA+4AAAAgAAAAH1NlbmRlciBhZGRyZXNzIG9uIHNvdXJjZSBjaGFpbi4AAAAABnNlbmRlcgAAAAAAEwAAABNTb3VyY2UgZW5kcG9pbnQgSUQuAAAAAAdzcmNfZWlkAAAAAAQ=",
+    "AAAAAQAAACtBIGZlZSByZWNpcGllbnQgd2l0aCB0aGUgYW1vdW50IHRvIGJlIHBhaWQuAAAAAAAAAAAMRmVlUmVjaXBpZW50AAAAAgAAABVBbW91bnQgb2YgZmVlIHRvIHBheS4AAAAAAAAGYW1vdW50AAAAAAALAAAAH1RoZSBhZGRyZXNzIHRvIHNlbmQgdGhlIGZlZSB0by4AAAAAAnRvAAAAAAAT",
+    "AAAAAQAAADxSZXN1bHQgb2Ygc2VuZCBvcGVyYXRpb24gY29udGFpbmluZyBmZWVzIGFuZCBlbmNvZGVkIHBhY2tldC4AAAAAAAAADUZlZXNBbmRQYWNrZXQAAAAAAAADAAAAKlRoZSBlbmNvZGVkIHBhY2tldCByZWFkeSBmb3IgdHJhbnNtaXNzaW9uLgAAAAAADmVuY29kZWRfcGFja2V0AAAAAAAOAAAAP0xpc3Qgb2YgbmF0aXZlIHRva2VuIGZlZSByZWNpcGllbnRzIChleGVjdXRvciwgRFZOcywgdHJlYXN1cnkpLgAAAAAVbmF0aXZlX2ZlZV9yZWNpcGllbnRzAAAAAAAD6gAAB9AAAAAMRmVlUmVjaXBpZW50AAAALExpc3Qgb2YgWlJPIHRva2VuIGZlZSByZWNpcGllbnRzICh0cmVhc3VyeSkuAAAAEnpyb19mZWVfcmVjaXBpZW50cwAAAAAD6gAAB9AAAAAMRmVlUmVjaXBpZW50",
+    "AAAAAgAAAAAAAAAAAAAAD0VuZHBvaW50U3RvcmFnZQAAAAASAAAAAAAAAAAAAAADRWlkAAAAAAAAAAAAAAAAC05hdGl2ZVRva2VuAAAAAAAAAAAAAAAAA1pybwAAAAABAAAAAAAAAAhEZWxlZ2F0ZQAAAAEAAAATAAAAAQAAAAAAAAAUUGVuZGluZ0luYm91bmROb25jZXMAAAADAAAAEwAAAAQAAAPuAAAAIAAAAAEAAAAAAAAADEluYm91bmROb25jZQAAAAMAAAATAAAABAAAA+4AAAAgAAAAAQAAAAAAAAASSW5ib3VuZFBheWxvYWRIYXNoAAAAAAAEAAAAEwAAAAQAAAPuAAAAIAAAAAYAAAABAAAAAAAAAA1PdXRib3VuZE5vbmNlAAAAAAAAAwAAABMAAAAEAAAD7gAAACAAAAAAAAAAAAAAABhSZWdpc3RlcmVkTGlicmFyaWVzQ291bnQAAAABAAAAAAAAAA5MaWJyYXJ5VG9JbmRleAAAAAAAAQAAABMAAAABAAAAAAAAAA5JbmRleFRvTGlicmFyeQAAAAAAAQAAAAQAAAABAAAAAAAAABJEZWZhdWx0U2VuZExpYnJhcnkAAAAAAAEAAAAEAAAAAQAAAAAAAAAVRGVmYXVsdFJlY2VpdmVMaWJyYXJ5AAAAAAAAAQAAAAQAAAABAAAAAAAAABxEZWZhdWx0UmVjZWl2ZUxpYnJhcnlUaW1lb3V0AAAAAQAAAAQAAAABAAAAAAAAAAtTZW5kTGlicmFyeQAAAAACAAAAEwAAAAQAAAABAAAAAAAAAA5SZWNlaXZlTGlicmFyeQAAAAAAAgAAABMAAAAEAAAAAQAAAAAAAAAVUmVjZWl2ZUxpYnJhcnlUaW1lb3V0AAAAAAAAAgAAABMAAAAEAAAAAQAAAAAAAAAMQ29tcG9zZVF1ZXVlAAAABAAAABMAAAATAAAD7gAAACAAAAAE",
+    "AAAAAAAAAOdTZW5kcyBhIGNvbXBvc2VkIG1lc3NhZ2UgZnJvbSBhbiBPQXBwIHRvIGEgY29tcG9zZXIuCgpUaGUgY29tcG9zZXIgTVVTVCBhc3NlcnQgdGhlIHNlbmRlciBiZWNhdXNlIGFueW9uZSBjYW4gc2VuZCBjb21wb3NlIG1zZyB3aXRoIHRoaXMgZnVuY3Rpb24uCldpdGggdGhlIHNhbWUgR1VJRCwgdGhlIE9BcHAgY2FuIHNlbmQgY29tcG9zZSB0byBtdWx0aXBsZSBjb21wb3NlcnMgYXQgdGhlIHNhbWUgdGltZS4AAAAADHNlbmRfY29tcG9zZQAAAAUAAAAAAAAABGZyb20AAAATAAAAAAAAAAJ0bwAAAAAAEwAAAAAAAAAEZ3VpZAAAA+4AAAAgAAAAAAAAAAVpbmRleAAAAAAAAAQAAAAAAAAAB21lc3NhZ2UAAAAADgAAAAA=",
+    "AAAAAAAAAGVDbGVhcnMgYSBjb21wb3NlZCBtZXNzYWdlIGJ5IHRoZSBjb21wb3Nlci4KClRoaXMgaXMgYSBQVUxMIG1vZGUgdmVyc3VzIHRoZSBQVVNIIG1vZGUgb2YgYGx6X2NvbXBvc2VgLgAAAAAAAA1jbGVhcl9jb21wb3NlAAAAAAAABQAAAAAAAAAIY29tcG9zZXIAAAATAAAAAAAAAARmcm9tAAAAEwAAAAAAAAAEZ3VpZAAAA+4AAAAgAAAAAAAAAAVpbmRleAAAAAAAAAQAAAAAAAAAB21lc3NhZ2UAAAAADgAAAAA=",
+    "AAAAAAAAAIlFbWl0cyBhbiBhbGVydCBldmVudCB3aGVuIGBsel9jb21wb3NlYCBleGVjdXRpb24gZmFpbHMuCgpDYWxsZWQgYnkgdGhlIGV4ZWN1dG9yIHRvIG5vdGlmeSBhYm91dCBmYWlsZWQgY29tcG9zZSBtZXNzYWdlIGRlbGl2ZXJ5IGF0dGVtcHRzLgAAAAAAABBsel9jb21wb3NlX2FsZXJ0AAAACgAAAAAAAAAIZXhlY3V0b3IAAAATAAAAAAAAAARmcm9tAAAAEwAAAAAAAAACdG8AAAAAABMAAAAAAAAABGd1aWQAAAPuAAAAIAAAAAAAAAAFaW5kZXgAAAAAAAAEAAAAAAAAAANnYXMAAAAACwAAAAAAAAAFdmFsdWUAAAAAAAALAAAAAAAAAAdtZXNzYWdlAAAAAA4AAAAAAAAACmV4dHJhX2RhdGEAAAAAAA4AAAAAAAAABnJlYXNvbgAAAAAADgAAAAA=",
+    "AAAAAAAAAEhSZXR1cm5zIHRoZSBzdG9yZWQgaGFzaCBmb3IgYSBjb21wb3NlZCBtZXNzYWdlLCBvciBgTm9uZWAgaWYgbm90IHF1ZXVlZC4AAAANY29tcG9zZV9xdWV1ZQAAAAAAAAQAAAAAAAAABGZyb20AAAATAAAAAAAAAAJ0bwAAAAAAEwAAAAAAAAAEZ3VpZAAAA+4AAAAgAAAAAAAAAAVpbmRleAAAAAAAAAQAAAABAAAD6AAAA+4AAAAg",
+    "AAAAAAAAAGxTa2lwcyB0aGUgbmV4dCBleHBlY3RlZCBpbmJvdW5kIG5vbmNlIHdpdGhvdXQgdmVyaWZ5aW5nLgoKVGhlIG5vbmNlIHRvIHNraXAgbXVzdCBiZSB0aGUgbmV4dCBleHBlY3RlZCBub25jZS4AAAAEc2tpcAAAAAUAAAAAAAAABmNhbGxlcgAAAAAAEwAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAABnNlbmRlcgAAAAAD7gAAACAAAAAAAAAABW5vbmNlAAAAAAAABgAAAAA=",
+    "AAAAAAAAAHpNYXJrcyBhIHBhY2tldCBhcyB2ZXJpZmllZCwgYnV0IGRpc2FsbG93cyBleGVjdXRpb24gdW50aWwgaXQgaXMgcmUtdmVyaWZpZWQuCgpSZXF1aXJlcyB0aGUgcGF5bG9hZCBoYXNoIG5vdCBiZWVuIGV4ZWN1dGVkLgAAAAAABm5pbGlmeQAAAAAABgAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAAB3NyY19laWQAAAAABAAAAAAAAAAGc2VuZGVyAAAAAAPuAAAAIAAAAAAAAAAFbm9uY2UAAAAAAAAGAAAAAAAAAAxwYXlsb2FkX2hhc2gAAAPoAAAD7gAAACAAAAAA",
+    "AAAAAAAAAGBNYXJrcyBhIG5vbmNlIGFzIHVuZXhlY3V0YWJsZSBhbmQgdW4tdmVyaWZpYWJsZS4gVGhlIG5vbmNlIGNhbiBuZXZlciBiZSByZS12ZXJpZmllZCBvciBleGVjdXRlZC4AAAAEYnVybgAAAAYAAAAAAAAABmNhbGxlcgAAAAAAEwAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAABnNlbmRlcgAAAAAD7gAAACAAAAAAAAAABW5vbmNlAAAAAAAABgAAAAAAAAAMcGF5bG9hZF9oYXNoAAAD7gAAACAAAAAA",
+    "AAAAAAAAAC9HZW5lcmF0ZXMgdGhlIG5leHQgR1VJRCBmb3IgYW4gb3V0Ym91bmQgcGFja2V0LgAAAAAJbmV4dF9ndWlkAAAAAAAAAwAAAAAAAAAGc2VuZGVyAAAAAAATAAAAAAAAAAdkc3RfZWlkAAAAAAQAAAAAAAAACHJlY2VpdmVyAAAD7gAAACAAAAABAAAD7gAAACA=",
+    "AAAAAAAAAD5SZXR1cm5zIHRoZSBjdXJyZW50IG91dGJvdW5kIG5vbmNlIGZvciBhIHNwZWNpZmljIGRlc3RpbmF0aW9uLgAAAAAADm91dGJvdW5kX25vbmNlAAAAAAADAAAAAAAAAAZzZW5kZXIAAAAAABMAAAAAAAAAB2RzdF9laWQAAAAABAAAAAAAAAAIcmVjZWl2ZXIAAAPuAAAAIAAAAAEAAAAG",
+    "AAAAAAAAANtSZXR1cm5zIHRoZSBtYXggaW5kZXggb2YgdGhlIGxvbmdlc3QgZ2FwbGVzcyBzZXF1ZW5jZSBvZiB2ZXJpZmllZCBtZXNzYWdlIG5vbmNlcy4KClRoZSB1bmluaXRpYWxpemVkIHZhbHVlIGlzIDAuIFRoZSBmaXJzdCBub25jZSBpcyBhbHdheXMgMS4KCk5vdGU6IE9BcHAgZXhwbGljaXRseSBza2lwcGVkIG5vbmNlcyBjb3VudCBhcyAidmVyaWZpZWQiIGZvciB0aGVzZSBwdXJwb3Nlcy4AAAAADWluYm91bmRfbm9uY2UAAAAAAAADAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAAB3NyY19laWQAAAAABAAAAAAAAAAGc2VuZGVyAAAAAAPuAAAAIAAAAAEAAAAG",
+    "AAAAAAAAADdSZXR1cm5zIHRoZSBwZW5kaW5nIGluYm91bmQgbm9uY2VzIGZvciBhIHNwZWNpZmljIHBhdGguAAAAABZwZW5kaW5nX2luYm91bmRfbm9uY2VzAAAAAAADAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAAB3NyY19laWQAAAAABAAAAAAAAAAGc2VuZGVyAAAAAAPuAAAAIAAAAAEAAAPqAAAABg==",
+    "AAAAAAAAADZSZXR1cm5zIHRoZSBwYXlsb2FkIGhhc2ggZm9yIGEgc3BlY2lmaWMgaW5ib3VuZCBub25jZS4AAAAAABRpbmJvdW5kX3BheWxvYWRfaGFzaAAAAAQAAAAAAAAACHJlY2VpdmVyAAAAEwAAAAAAAAAHc3JjX2VpZAAAAAAEAAAAAAAAAAZzZW5kZXIAAAAAA+4AAAAgAAAAAAAAAAVub25jZQAAAAAAAAYAAAABAAAD6AAAA+4AAAAg",
+    "AAAAAAAAADJSZWdpc3RlcnMgYSBuZXcgbWVzc2FnZSBsaWJyYXJ5IHdpdGggdGhlIGVuZHBvaW50LgAAAAAAEHJlZ2lzdGVyX2xpYnJhcnkAAAABAAAAAAAAAAduZXdfbGliAAAAABMAAAAA",
+    "AAAAAAAAADlTZXRzIHRoZSBkZWZhdWx0IHNlbmQgbGlicmFyeSBmb3IgYSBkZXN0aW5hdGlvbiBlbmRwb2ludC4AAAAAAAAYc2V0X2RlZmF1bHRfc2VuZF9saWJyYXJ5AAAAAgAAAAAAAAAHZHN0X2VpZAAAAAAEAAAAAAAAAAduZXdfbGliAAAAABMAAAAA",
+    "AAAAAAAAALZTZXRzIHRoZSBkZWZhdWx0IHJlY2VpdmUgbGlicmFyeSBmb3IgYSBzb3VyY2UgZW5kcG9pbnQuCgpJZiBhIGdyYWNlIHBlcmlvZCBpcyBwcm92aWRlZCBhbmQgdGhlcmUgd2FzIGEgcHJldmlvdXMgbGlicmFyeSwgdGhlIG9sZCBsaWJyYXJ5CnJlbWFpbnMgdmFsaWQgdW50aWwgdGhlIGdyYWNlIHBlcmlvZCBleHBpcmVzLgAAAAAAG3NldF9kZWZhdWx0X3JlY2VpdmVfbGlicmFyeQAAAAADAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAAB25ld19saWIAAAAAEwAAAAAAAAAMZ3JhY2VfcGVyaW9kAAAABgAAAAA=",
+    "AAAAAAAAANJTZXRzIG9yIHJlbW92ZXMgdGhlIGRlZmF1bHQgcmVjZWl2ZSBsaWJyYXJ5IHRpbWVvdXQgZm9yIGEgc291cmNlIGVuZHBvaW50LgoKSWYgYSB0aW1lb3V0IGlzIHByb3ZpZGVkLCBpdCBtdXN0IGJlIHZhbGlkIGFuZCBub3QgZXhwaXJlZC4gSWYgbm8gdGltZW91dCBpcyBwcm92aWRlZCwKdGhlIGRlZmF1bHQgcmVjZWl2ZSBsaWJyYXJ5IHRpbWVvdXQgaXMgcmVtb3ZlZC4AAAAAAB9zZXRfZGVmYXVsdF9yZWNlaXZlX2xpYl90aW1lb3V0AAAAAAIAAAAAAAAAB3NyY19laWQAAAAABAAAAAAAAAAHdGltZW91dAAAAAPoAAAH0AAAAAdUaW1lb3V0AAAAAAA=",
+    "AAAAAAAAAFVTZXRzIG9yIHJlbW92ZXMgYSBjdXN0b20gc2VuZCBsaWJyYXJ5IGZvciBhbiBPQXBwIHRvIGEgc3BlY2lmaWMgZGVzdGluYXRpb24gZW5kcG9pbnQuAAAAAAAAEHNldF9zZW5kX2xpYnJhcnkAAAAEAAAAAAAAAAZjYWxsZXIAAAAAABMAAAAAAAAABnNlbmRlcgAAAAAAEwAAAAAAAAAHZHN0X2VpZAAAAAAEAAAAAAAAAAduZXdfbGliAAAAA+gAAAATAAAAAA==",
+    "AAAAAAAAANJTZXRzIG9yIHJlbW92ZXMgYSBjdXN0b20gcmVjZWl2ZSBsaWJyYXJ5IGZvciBhbiBPQXBwIHRvIGEgc3BlY2lmaWMgc291cmNlIGVuZHBvaW50LgoKSWYgYSBncmFjZSBwZXJpb2QgaXMgcHJvdmlkZWQgYW5kIHRoZXJlIHdhcyBhIHByZXZpb3VzIGxpYnJhcnksIHRoZSBvbGQgbGlicmFyeQpyZW1haW5zIHZhbGlkIHVudGlsIHRoZSBncmFjZSBwZXJpb2QgZXhwaXJlcy4AAAAAABNzZXRfcmVjZWl2ZV9saWJyYXJ5AAAAAAUAAAAAAAAABmNhbGxlcgAAAAAAEwAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAAB25ld19saWIAAAAD6AAAABMAAAAAAAAADGdyYWNlX3BlcmlvZAAAAAYAAAAA",
+    "AAAAAAAAALFTZXRzIG9yIHJlbW92ZXMgdGhlIGN1c3RvbSByZWNlaXZlIGxpYnJhcnkgdGltZW91dCBmb3IgYW4gT0FwcC4KCkFsbG93cyBhbiBPQXBwIHRvIGV4dGVuZCBvciByZW1vdmUgdGhlIHZhbGlkaXR5IHBlcmlvZCBvZiBhIHByZXZpb3VzbHkgc2V0IGxpYnJhcnkKYWZ0ZXIgc3dpdGNoaW5nIHRvIGEgbmV3IG9uZS4AAAAAAAAbc2V0X3JlY2VpdmVfbGlicmFyeV90aW1lb3V0AAAAAAQAAAAAAAAABmNhbGxlcgAAAAAAEwAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAAB3RpbWVvdXQAAAAD6AAAB9AAAAAHVGltZW91dAAAAAAA",
+    "AAAAAAAAAINTZXRzIHRoZSBjb25maWd1cmF0aW9uIGZvciBhIG1lc3NhZ2UgbGlicmFyeS4KClJlcXVpcmVzIHRoZSBjYWxsZXIgdG8gYmUgdGhlIE9BcHAgb3IgaXRzIGRlbGVnYXRlIGFuZCB0aGUgbGlicmFyeSB0byBiZSByZWdpc3RlcmVkLgAAAAAKc2V0X2NvbmZpZwAAAAAABAAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAAAAAARvYXBwAAAAEwAAAAAAAAADbGliAAAAABMAAAAAAAAABnBhcmFtcwAAAAAD6gAAB9AAAAAOU2V0Q29uZmlnUGFyYW0AAAAAAAA=",
+    "AAAAAAAAACpDaGVja3MgaWYgYSBtZXNzYWdlIGxpYnJhcnkgaXMgcmVnaXN0ZXJlZC4AAAAAABVpc19yZWdpc3RlcmVkX2xpYnJhcnkAAAAAAAABAAAAAAAAAANsaWIAAAAAEwAAAAEAAAAB",
+    "AAAAAAAAACdSZXR1cm5zIHRoZSBpbmRleCBvZiBhIG1lc3NhZ2UgbGlicmFyeS4AAAAAEWdldF9saWJyYXJ5X2luZGV4AAAAAAAAAQAAAAAAAAADbGliAAAAABMAAAABAAAD6AAAAAQ=",
+    "AAAAAAAAADNSZXR1cm5zIHRoZSBudW1iZXIgb2YgcmVnaXN0ZXJlZCBtZXNzYWdlIGxpYnJhcmllcy4AAAAAGnJlZ2lzdGVyZWRfbGlicmFyaWVzX2NvdW50AAAAAAAAAAAAAQAAAAQ=",
+    "AAAAAAAAAEpSZXR1cm5zIGEgbGlzdCBvZiByZWdpc3RlcmVkIG1lc3NhZ2UgbGlicmFyaWVzIHdpdGhpbiB0aGUgc3BlY2lmaWVkIHJhbmdlLgAAAAAAGGdldF9yZWdpc3RlcmVkX2xpYnJhcmllcwAAAAIAAAAAAAAABXN0YXJ0AAAAAAAABAAAAAAAAAAJbWF4X2NvdW50AAAAAAAABAAAAAEAAAPqAAAAEw==",
+    "AAAAAAAAAH1DaGVja3MgaWYgYW4gZW5kcG9pbnQgSUQgaXMgc3VwcG9ydGVkLgpSZXR1cm5zIHRydWUgb25seSBpZiBib3RoIHRoZSBkZWZhdWx0IHNlbmQvcmVjZWl2ZSBsaWJyYXJpZXMgYXJlIHNldCBmb3IgdGhlIGdpdmVuIGVpZAAAAAAAABBpc19zdXBwb3J0ZWRfZWlkAAAAAQAAAAAAAAADZWlkAAAAAAQAAAABAAAAAQ==",
+    "AAAAAAAAADxSZXR1cm5zIHRoZSBkZWZhdWx0IHNlbmQgbGlicmFyeSBmb3IgYSBkZXN0aW5hdGlvbiBlbmRwb2ludC4AAAAUZGVmYXVsdF9zZW5kX2xpYnJhcnkAAAABAAAAAAAAAAdkc3RfZWlkAAAAAAQAAAABAAAD6AAAABM=",
+    "AAAAAAAAADpSZXR1cm5zIHRoZSBkZWZhdWx0IHJlY2VpdmUgbGlicmFyeSBmb3IgYSBzb3VyY2UgZW5kcG9pbnQuAAAAAAAXZGVmYXVsdF9yZWNlaXZlX2xpYnJhcnkAAAAAAQAAAAAAAAAHc3JjX2VpZAAAAAAEAAAAAQAAA+gAAAAT",
+    "AAAAAAAAAEJSZXR1cm5zIHRoZSBkZWZhdWx0IHJlY2VpdmUgbGlicmFyeSB0aW1lb3V0IGZvciBhIHNvdXJjZSBlbmRwb2ludC4AAAAAAB9kZWZhdWx0X3JlY2VpdmVfbGlicmFyeV90aW1lb3V0AAAAAAEAAAAAAAAAB3NyY19laWQAAAAABAAAAAEAAAPoAAAH0AAAAAdUaW1lb3V0AA==",
+    "AAAAAAAAAEhSZXR1cm5zIHRoZSBlZmZlY3RpdmUgc2VuZCBsaWJyYXJ5IGZvciBhbiBPQXBwIGFuZCBkZXN0aW5hdGlvbiBlbmRwb2ludC4AAAAQZ2V0X3NlbmRfbGlicmFyeQAAAAIAAAAAAAAABnNlbmRlcgAAAAAAEwAAAAAAAAAHZHN0X2VpZAAAAAAEAAAAAQAAB9AAAAAPUmVzb2x2ZWRMaWJyYXJ5AA==",
+    "AAAAAAAAAEZSZXR1cm5zIHRoZSBlZmZlY3RpdmUgcmVjZWl2ZSBsaWJyYXJ5IGZvciBhbiBPQXBwIGFuZCBzb3VyY2UgZW5kcG9pbnQuAAAAAAATZ2V0X3JlY2VpdmVfbGlicmFyeQAAAAACAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAAB3NyY19laWQAAAAABAAAAAEAAAfQAAAAD1Jlc29sdmVkTGlicmFyeQA=",
+    "AAAAAAAAAERSZXR1cm5zIHRoZSByZWNlaXZlIGxpYnJhcnkgdGltZW91dCBmb3IgYW4gT0FwcCBhbmQgc291cmNlIGVuZHBvaW50LgAAABdyZWNlaXZlX2xpYnJhcnlfdGltZW91dAAAAAACAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAAB3NyY19laWQAAAAABAAAAAEAAAPoAAAH0AAAAAdUaW1lb3V0AA==",
+    "AAAAAAAAAEVDaGVja3MgaWYgYSByZWNlaXZlIGxpYnJhcnkgaXMgdmFsaWQgZm9yIGFuIE9BcHAgYW5kIHNvdXJjZSBlbmRwb2ludC4AAAAAAAAYaXNfdmFsaWRfcmVjZWl2ZV9saWJyYXJ5AAAAAwAAAAAAAAAIcmVjZWl2ZXIAAAATAAAAAAAAAAdzcmNfZWlkAAAAAAQAAAAAAAAACmFjdHVhbF9saWIAAAAAABMAAAABAAAAAQ==",
+    "AAAAAAAAAGJSZXR1cm5zIHRoZSBjb25maWd1cmF0aW9uIGZvciBhIG1lc3NhZ2UgbGlicmFyeSBmb3IgYSBzcGVjaWZpYyBlbmRwb2ludCBJRCBhbmQgY29uZmlndXJhdGlvbiB0eXBlLgAAAAAACmdldF9jb25maWcAAAAAAAQAAAAAAAAABG9hcHAAAAATAAAAAAAAAANsaWIAAAAAEwAAAAAAAAADZWlkAAAAAAQAAAAAAAAAC2NvbmZpZ190eXBlAAAAAAQAAAABAAAADg==",
+    "AAAAAAAAADtRdW90ZXMgdGhlIG1lc3NhZ2luZyBmZWUgZm9yIHNlbmRpbmcgYSBjcm9zcy1jaGFpbiBtZXNzYWdlLgAAAAAFcXVvdGUAAAAAAAACAAAAAAAAAAZzZW5kZXIAAAAAABMAAAAAAAAABnBhcmFtcwAAAAAH0AAAAA9NZXNzYWdpbmdQYXJhbXMAAAAAAQAAB9AAAAAMTWVzc2FnaW5nRmVl",
+    "AAAAAAAAAIlTZW5kcyBhIGNyb3NzLWNoYWluIG1lc3NhZ2UgdG8gYSBkZXN0aW5hdGlvbiBlbmRwb2ludC4KCk9BcHAgc2VuZGVyIG5lZWRzIHRvIHRyYW5zZmVyIHRoZSBmZWVzIHRvIHRoZSBlbmRwb2ludCBiZWZvcmUgc2VuZGluZyB0aGUgbWVzc2FnZQAAAAAAAARzZW5kAAAAAwAAAAAAAAAGc2VuZGVyAAAAAAATAAAAAAAAAAZwYXJhbXMAAAAAB9AAAAAPTWVzc2FnaW5nUGFyYW1zAAAAAAAAAAAOcmVmdW5kX2FkZHJlc3MAAAAAABMAAAABAAAH0AAAABBNZXNzYWdpbmdSZWNlaXB0",
+    "AAAAAAAAAEpWZXJpZmllcyBhbiBpbmJvdW5kIGNyb3NzLWNoYWluIG1lc3NhZ2UgZnJvbSBhIGNvbmZpZ3VyZWQgcmVjZWl2ZSBsaWJyYXJ5LgAAAAAABnZlcmlmeQAAAAAABAAAAAAAAAALcmVjZWl2ZV9saWIAAAAAEwAAAAAAAAAGb3JpZ2luAAAAAAfQAAAABk9yaWdpbgAAAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAADHBheWxvYWRfaGFzaAAAA+4AAAAgAAAAAA==",
+    "AAAAAAAAAGdDbGVhcnMgYSB2ZXJpZmllZCBtZXNzYWdlIGZyb20gdGhlIGVuZHBvaW50LgoKVGhpcyBpcyBhIFBVTEwgbW9kZSB2ZXJzdXMgdGhlIFBVU0ggbW9kZSBvZiBgbHpfcmVjZWl2ZWAuAAAAAAVjbGVhcgAAAAAAAAUAAAAAAAAABmNhbGxlcgAAAAAAEwAAAAAAAAAGb3JpZ2luAAAAAAfQAAAABk9yaWdpbgAAAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAABGd1aWQAAAPuAAAAIAAAAAAAAAAHbWVzc2FnZQAAAAAOAAAAAA==",
+    "AAAAAAAAAIFFbWl0cyBhbiBhbGVydCBldmVudCB3aGVuIGBsel9yZWNlaXZlYCBleGVjdXRpb24gZmFpbHMuCgpDYWxsZWQgYnkgdGhlIGV4ZWN1dG9yIHRvIG5vdGlmeSBhYm91dCBmYWlsZWQgbWVzc2FnZSBkZWxpdmVyeSBhdHRlbXB0cy4AAAAAAAAQbHpfcmVjZWl2ZV9hbGVydAAAAAkAAAAAAAAACGV4ZWN1dG9yAAAAEwAAAAAAAAAGb3JpZ2luAAAAAAfQAAAABk9yaWdpbgAAAAAAAAAAAAhyZWNlaXZlcgAAABMAAAAAAAAABGd1aWQAAAPuAAAAIAAAAAAAAAADZ2FzAAAAAAsAAAAAAAAABXZhbHVlAAAAAAAACwAAAAAAAAAHbWVzc2FnZQAAAAAOAAAAAAAAAApleHRyYV9kYXRhAAAAAAAOAAAAAAAAAAZyZWFzb24AAAAAAA4AAAAA",
+    "AAAAAAAAACxTZXRzIHRoZSBaUk8gdG9rZW4gYWRkcmVzcyBmb3IgZmVlIHBheW1lbnRzLgAAAAdzZXRfenJvAAAAAAEAAAAAAAAAA3pybwAAAAATAAAAAA==",
+    "AAAAAAAAAEZTZXRzIG9yIHJlbW92ZXMgYSBkZWxlZ2F0ZSBhZGRyZXNzIHRoYXQgY2FuIGFjdCBvbiBiZWhhbGYgb2YgdGhlIE9BcHAuAAAAAAAMc2V0X2RlbGVnYXRlAAAAAgAAAAAAAAAEb2FwcAAAABMAAAAAAAAADG5ld19kZWxlZ2F0ZQAAA+gAAAATAAAAAA==",
+    "AAAAAAAAABhSZXR1cm5zIHRoZSBlbmRwb2ludCBJRC4AAAADZWlkAAAAAAAAAAABAAAABA==",
+    "AAAAAAAAAFlDaGVja3MgaWYgYSBtZXNzYWdpbmcgcGF0aCBjYW4gYmUvaGFzIGJlZW4gaW5pdGlhbGl6ZWQgZm9yIHRoZSBnaXZlbiBvcmlnaW4gYW5kIHJlY2VpdmVyLgAAAAAAAA1pbml0aWFsaXphYmxlAAAAAAAAAgAAAAAAAAAGb3JpZ2luAAAAAAfQAAAABk9yaWdpbgAAAAAAAAAAAAhyZWNlaXZlcgAAABMAAAABAAAAAQ==",
+    "AAAAAAAAAEZDaGVja3MgaWYgYSBtZXNzYWdlIGNhbiBiZSB2ZXJpZmllZCBmb3IgdGhlIGdpdmVuIG9yaWdpbiBhbmQgcmVjZWl2ZXIuAAAAAAAKdmVyaWZpYWJsZQAAAAAAAgAAAAAAAAAGb3JpZ2luAAAAAAfQAAAABk9yaWdpbgAAAAAAAAAAAAhyZWNlaXZlcgAAABMAAAABAAAAAQ==",
+    "AAAAAAAAADdSZXR1cm5zIHRoZSBuYXRpdmUgdG9rZW4gYWRkcmVzcyB1c2VkIGZvciBmZWUgcGF5bWVudHMuAAAAAAxuYXRpdmVfdG9rZW4AAAAAAAAAAQAAABM=",
+    "AAAAAAAAACVSZXR1cm5zIHRoZSBaUk8gdG9rZW4gYWRkcmVzcyBpZiBzZXQuAAAAAAAAA3pybwAAAAAAAAAAAQAAA+gAAAAT",
+    "AAAAAAAAADBSZXR1cm5zIHRoZSBkZWxlZ2F0ZSBhZGRyZXNzIGZvciBhbiBPQXBwIGlmIHNldC4AAAAIZGVsZWdhdGUAAAABAAAAAAAAAARvYXBwAAAAEwAAAAEAAAPoAAAAEw==",
+    "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAMAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAADZWlkAAAAAAQAAAAAAAAADG5hdGl2ZV90b2tlbgAAABMAAAAA",
+    "AAAAAAAAALFSZWNvdmVycyB0b2tlbnMgc2VudCB0byB0aGlzIGNvbnRyYWN0IGJ5IG1pc3Rha2UuCgojIEFyZ3VtZW50cwoqIGB0b2tlbmAgLSBUaGUgdG9rZW4gYWRkcmVzcyB0byByZWNvdmVyCiogYHRvYCAtIFRoZSBhZGRyZXNzIHRvIHNlbmQgdGhlIHRva2VuIHRvCiogYGFtb3VudGAgLSBUaGUgYW1vdW50IHRvIHNlbmQAAAAAAAANcmVjb3Zlcl90b2tlbgAAAAAAAAMAAAAAAAAABXRva2VuAAAAAAAAEwAAAAAAAAACdG8AAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAA=",
+    "AAAAAAAAAAAAAAAKYXV0aG9yaXplcgAAAAAAAAAAAAEAAAPoAAAAEw==",
+    "AAAAAAAAAD5SZXR1cm5zIHRoZSBjdXJyZW50IG93bmVyIGFkZHJlc3MsIG9yIE5vbmUgaWYgbm8gb3duZXIgaXMgc2V0LgAAAAAABW93bmVyAAAAAAAAAAAAAAEAAAPoAAAAEw==",
+    "AAAAAAAAAFlSZXR1cm5zIHRoZSBwZW5kaW5nIG93bmVyIGFkZHJlc3MgZm9yIDItc3RlcCB0cmFuc2Zlciwgb3IgTm9uZSBpZiBubyB0cmFuc2ZlciBpcyBwZW5kaW5nLgAAAAAAAA1wZW5kaW5nX293bmVyAAAAAAAAAAAAAAEAAAPoAAAAEw==",
+    "AAAAAAAAASlUcmFuc2ZlcnMgb3duZXJzaGlwIGltbWVkaWF0ZWx5IHRvIGEgbmV3IGFkZHJlc3MuCgpVc2Ugd2l0aCBjYXV0aW9uIC0gaWYgeW91IHRyYW5zZmVyIHRvIGEgd3JvbmcgYWRkcmVzcywgb3duZXJzaGlwIGlzIGxvc3QgZm9yZXZlci4KQ29uc2lkZXIgdXNpbmcgYGJlZ2luX293bmVyc2hpcF90cmFuc2ZlcmAgaW5zdGVhZC4KCiMgUGFuaWNzCi0gYE93bmVyTm90U2V0YCBpZiBubyBvd25lciBpcyBjdXJyZW50bHkgc2V0Ci0gYFRyYW5zZmVySW5Qcm9ncmVzc2AgaWYgYSAyLXN0ZXAgdHJhbnNmZXIgaXMgaW4gcHJvZ3Jlc3MAAAAAAAASdHJhbnNmZXJfb3duZXJzaGlwAAAAAAABAAAAAAAAAAluZXdfb3duZXIAAAAAAAATAAAAAA==",
+    "AAAAAAAAAlpCZWdpbnMgYW4gb3duZXJzaGlwIHRyYW5zZmVyIHRvIGEgbmV3IGFkZHJlc3MuCgpUaGUgbmV3IG93bmVyIG11c3QgY2FsbCBgYWNjZXB0X293bmVyc2hpcCgpYCB3aXRoaW4gYHR0bGAgbGVkZ2Vycwp0byBjb21wbGV0ZSB0aGUgdHJhbnNmZXIuIFRoZSBwZW5kaW5nIHRyYW5zZmVyIHdpbGwgYXV0b21hdGljYWxseSBleHBpcmUgYWZ0ZXIuCgojIEFyZ3VtZW50cwotIGBuZXdfb3duZXJgIC0gVGhlIHByb3Bvc2VkIG5ldyBvd25lcgotIGB0dGxgIC0gTnVtYmVyIG9mIGxlZGdlcnMgdGhlIG5ldyBvd25lciBoYXMgdG8gYWNjZXB0LgpVc2UgYDBgIHRvIGNhbmNlbCBhIHBlbmRpbmcgdHJhbnNmZXIgKG5ld19vd25lciBtdXN0IG1hdGNoIHBlbmRpbmcpLgoKIyBQYW5pY3MKLSBgT3duZXJOb3RTZXRgIGlmIG5vIG93bmVyIGlzIGN1cnJlbnRseSBzZXQKLSBgTm9QZW5kaW5nVHJhbnNmZXJgIHdoZW4gY2FuY2VsbGluZyBhbmQgbm8gcGVuZGluZyB0cmFuc2ZlciBleGlzdHMKLSBgSW52YWxpZFR0bGAgaWYgdHRsIGV4Y2VlZHMgbWF4IFRUTAotIGBJbnZhbGlkUGVuZGluZ093bmVyYCB3aGVuIGNhbmNlbGxpbmcgd2l0aCB3cm9uZyBuZXdfb3duZXIgYWRkcmVzcwAAAAAAGGJlZ2luX293bmVyc2hpcF90cmFuc2ZlcgAAAAIAAAAAAAAACW5ld19vd25lcgAAAAAAABMAAAAAAAAAA3R0bAAAAAAEAAAAAA==",
+    "AAAAAAAAALlBY2NlcHRzIGEgcGVuZGluZyAyLXN0ZXAgb3duZXJzaGlwIHRyYW5zZmVyLgoKTXVzdCBiZSBjYWxsZWQgYnkgdGhlIHBlbmRpbmcgb3duZXIgYmVmb3JlIHRoZSBUVEwgZXhwaXJlcy4KCiMgUGFuaWNzCi0gYE5vUGVuZGluZ1RyYW5zZmVyYCBpZiB0aGVyZSBpcyBubyBwZW5kaW5nIHRyYW5zZmVyIChvciBpdCBleHBpcmVkKQAAAAAAABBhY2NlcHRfb3duZXJzaGlwAAAAAAAAAAA=",
+    "AAAAAAAAAKRQZXJtYW5lbnRseSByZW5vdW5jZXMgb3duZXJzaGlwLgoKIyBQYW5pY3MKLSBgT3duZXJOb3RTZXRgIGlmIG5vIG93bmVyIGlzIGN1cnJlbnRseSBzZXQKLSBgVHJhbnNmZXJJblByb2dyZXNzYCBpZiBhIDItc3RlcCB0cmFuc2ZlciBpcyBpbiBwcm9ncmVzcyAoY2FuY2VsIGl0IGZpcnN0KQAAABJyZW5vdW5jZV9vd25lcnNoaXAAAAAAAAAAAAAA",
+    "AAAAAAAAAKVFeHRlbmRzIHRoZSBpbnN0YW5jZSBUVEwuCgojIEFyZ3VtZW50cwoKKiBgdGhyZXNob2xkYCAtIFRoZSB0aHJlc2hvbGQgdG8gZXh0ZW5kIHRoZSBUVEwgKGlmIGN1cnJlbnQgVFRMIGlzIGJlbG93IHRoaXMsIGV4dGVuZCkuCiogYGV4dGVuZF90b2AgLSBUaGUgVFRMIHRvIGV4dGVuZCB0by4AAAAAAAATZXh0ZW5kX2luc3RhbmNlX3R0bAAAAAACAAAAAAAAAAl0aHJlc2hvbGQAAAAAAAAEAAAAAAAAAAlleHRlbmRfdG8AAAAAAAAEAAAAAA==",
+    "AAAAAAAAAY9TZXRzIFRUTCBjb25maWdzIGZvciBpbnN0YW5jZSBhbmQgcGVyc2lzdGVudCBzdG9yYWdlLgoKLSBgTm9uZWAgdmFsdWVzIHJlbW92ZSB0aGUgY29ycmVzcG9uZGluZyBjb25maWcgKGRpc2FibGVzIGF1dG8tZXh0ZW5zaW9uIGZvciB0aGF0IHR5cGUpCi0gVmFsaWRhdGVzIHRoYXQgYHRocmVzaG9sZCA8PSBleHRlbmRfdG8gPD0gTUFYX1RUTGAKCiMgQXJndW1lbnRzCi0gYGluc3RhbmNlYCAtIFRUTCBjb25maWcgZm9yIGluc3RhbmNlIHN0b3JhZ2UKLSBgcGVyc2lzdGVudGAgLSBUVEwgY29uZmlnIGZvciBwZXJzaXN0ZW50IHN0b3JhZ2UKCiMgUGFuaWNzCi0gYFR0bENvbmZpZ0Zyb3plbmAgaWYgY29uZmlncyBhcmUgZnJvemVuCi0gYEludmFsaWRUdGxDb25maWdgIGlmIHZhbGlkYXRpb24gZmFpbHMAAAAAD3NldF90dGxfY29uZmlncwAAAAACAAAAAAAAAAhpbnN0YW5jZQAAA+gAAAfQAAAACVR0bENvbmZpZwAAAAAAAAAAAAAKcGVyc2lzdGVudAAAAAAD6AAAB9AAAAAJVHRsQ29uZmlnAAAAAAAAAA==",
+    "AAAAAAAAAEhSZXR1cm5zIHRoZSBjdXJyZW50IFRUTCBjb25maWdzIGFzIChpbnN0YW5jZV9jb25maWcsIHBlcnNpc3RlbnRfY29uZmlnKS4AAAALdHRsX2NvbmZpZ3MAAAAAAAAAAAEAAAPtAAAAAgAAA+gAAAfQAAAACVR0bENvbmZpZwAAAAAAA+gAAAfQAAAACVR0bENvbmZpZwAAAA==",
+    "AAAAAAAAAOFQZXJtYW5lbnRseSBmcmVlemVzIFRUTCBjb25maWdzLCBwcmV2ZW50aW5nIGFueSBmdXR1cmUgbW9kaWZpY2F0aW9ucy4KClRoaXMgaXMgaXJyZXZlcnNpYmxlIGFuZCBwcm92aWRlcyBpbW11dGFiaWxpdHkgZ3VhcmFudGVlcyB0byB1c2Vycy4KRW1pdHMgYFR0bENvbmZpZ3NGcm96ZW5gIGV2ZW50LgoKIyBQYW5pY3MKLSBgVHRsQ29uZmlnQWxyZWFkeUZyb3plbmAgaWYgYWxyZWFkeSBmcm96ZW4AAAAAAAASZnJlZXplX3R0bF9jb25maWdzAAAAAAAAAAAAAA==",
+    "AAAAAAAAACdSZXR1cm5zIHdoZXRoZXIgVFRMIGNvbmZpZ3MgYXJlIGZyb3plbi4AAAAAFWlzX3R0bF9jb25maWdzX2Zyb3plbgAAAAAAAAAAAAABAAAAAQ==",
+    "AAAABAAAABxCdWZmZXJSZWFkZXJFcnJvcjogMTAwMC0xMDA5AAAAAAAAABFCdWZmZXJSZWFkZXJFcnJvcgAAAAAAAAIAAAAAAAAADUludmFsaWRMZW5ndGgAAAAAAAPoAAAAAAAAABVJbnZhbGlkQWRkcmVzc1BheWxvYWQAAAAAAAPp",
+    "AAAABAAAABxCdWZmZXJXcml0ZXJFcnJvcjogMTAxMC0xMDE5AAAAAAAAABFCdWZmZXJXcml0ZXJFcnJvcgAAAAAAAAEAAAAAAAAAFUludmFsaWRBZGRyZXNzUGF5bG9hZAAAAAAAA/I=",
+    "AAAABAAAAB9UdGxDb25maWd1cmFibGVFcnJvcjogMTAyMC0xMDI5AAAAAAAAAAAUVHRsQ29uZmlndXJhYmxlRXJyb3IAAAADAAAAAAAAABBJbnZhbGlkVHRsQ29uZmlnAAAD/AAAAAAAAAAPVHRsQ29uZmlnRnJvemVuAAAAA/0AAAAAAAAAFlR0bENvbmZpZ0FscmVhZHlGcm96ZW4AAAAAA/4=",
+    "AAAABAAAABdPd25hYmxlRXJyb3I6IDEwMzAtMTAzOQAAAAAAAAAADE93bmFibGVFcnJvcgAAAAcAAAAAAAAAEUludmFsaWRBdXRob3JpemVyAAAAAAAEBgAAAAAAAAATSW52YWxpZFBlbmRpbmdPd25lcgAAAAQHAAAAAAAAAApJbnZhbGlkVHRsAAAAAAQIAAAAAAAAABFOb1BlbmRpbmdUcmFuc2ZlcgAAAAAABAkAAAAAAAAAD093bmVyQWxyZWFkeVNldAAAAAQKAAAAAAAAAAtPd25lck5vdFNldAAAAAQLAAAAAAAAABJUcmFuc2ZlckluUHJvZ3Jlc3MAAAAABAw=",
+    "AAAABAAAABhCeXRlc0V4dEVycm9yOiAxMDQwLTEwNDkAAAAAAAAADUJ5dGVzRXh0RXJyb3IAAAAAAAABAAAAAAAAAA5MZW5ndGhNaXNtYXRjaAAAAAAEEA==",
+    "AAAABAAAABtVcGdyYWRlYWJsZUVycm9yOiAxMDUwLTEwNTkAAAAAAAAAABBVcGdyYWRlYWJsZUVycm9yAAAAAgAAAAAAAAAUSW52YWxpZE1pZ3JhdGlvbkRhdGEAAAQaAAAAAAAAABNNaWdyYXRpb25Ob3RBbGxvd2VkAAAABBs=",
+    "AAAABAAAABhNdWx0aVNpZ0Vycm9yOiAxMDYwLTEwNjkAAAAAAAAADU11bHRpU2lnRXJyb3IAAAAAAAAJAAAAAAAAABJBbHJlYWR5SW5pdGlhbGl6ZWQAAAAABCQAAAAAAAAAEUludmFsaWRBdXRob3JpemVyAAAAAAAEJQAAAAAAAAANSW52YWxpZFNpZ25lcgAAAAAABCYAAAAAAAAADlNpZ25hdHVyZUVycm9yAAAAAAQnAAAAAAAAABNTaWduZXJBbHJlYWR5RXhpc3RzAAAABCgAAAAAAAAADlNpZ25lck5vdEZvdW5kAAAAAAQpAAAAAAAAAB1Ub3RhbFNpZ25lcnNMZXNzVGhhblRocmVzaG9sZAAAAAAABCoAAAAAAAAAD1Vuc29ydGVkU2lnbmVycwAAAAQrAAAAAAAAAA1aZXJvVGhyZXNob2xkAAAAAAAELA==",
+    "AAAABAAAABRBdXRoRXJyb3I6IDEwNzAtMTA3OQAAAAAAAAAJQXV0aEVycm9yAAAAAAAAAQAAAAAAAAASQXV0aG9yaXplck5vdEZvdW5kAAAAAAQu",
+    "AAAABAAAABRSYmFjRXJyb3I6IDEwODAtMTA4OQAAAAAAAAAJUmJhY0Vycm9yAAAAAAAABwAAAAAAAAARQWRtaW5Sb2xlTm90Rm91bmQAAAAAAAQ4AAAAAAAAABBJbmRleE91dE9mQm91bmRzAAAEOQAAAAAAAAAQTWF4Um9sZXNFeGNlZWRlZAAABDoAAAAAAAAAC1JvbGVJc0VtcHR5AAAABDsAAAAAAAAADFJvbGVOb3RGb3VuZAAABDwAAAAAAAAAC1JvbGVOb3RIZWxkAAAABD0AAAAAAAAADFVuYXV0aG9yaXplZAAABD4=",
+    "AAAABQAAADBFdmVudCBlbWl0dGVkIHdoZW4gYSBzaWduZXIgaXMgYWRkZWQgb3IgcmVtb3ZlZC4AAAAAAAAACVNpZ25lclNldAAAAAAAAAEAAAAKc2lnbmVyX3NldAAAAAAAAgAAAAAAAAAGc2lnbmVyAAAAAAPuAAAAFAAAAAEAAAAAAAAABmFjdGl2ZQAAAAAAAQAAAAAAAAAC",
+    "AAAABQAAADZFdmVudCBlbWl0dGVkIHdoZW4gdGhlIHNpZ25hdHVyZSB0aHJlc2hvbGQgaXMgY2hhbmdlZC4AAAAAAAAAAAAMVGhyZXNob2xkU2V0AAAAAQAAAA10aHJlc2hvbGRfc2V0AAAAAAAAAQAAAAAAAAAJdGhyZXNob2xkAAAAAAAABAAAAAAAAAAC",
+    "AAAAAgAAAAAAAAAAAAAAD011bHRpU2lnU3RvcmFnZQAAAAACAAAAAAAAAAAAAAAHU2lnbmVycwAAAAAAAAAAAAAAAAlUaHJlc2hvbGQAAAA=",
+    "AAAABQAAAFdFdmVudCBlbWl0dGVkIHdoZW4gb3duZXJzaGlwIGlzIHRyYW5zZmVycmVkIChib3RoIHNpbmdsZS1zdGVwIGFuZCB0d28tc3RlcCBjb21wbGV0aW9uKS4AAAAAAAAAABRPd25lcnNoaXBUcmFuc2ZlcnJlZAAAAAEAAAAVb3duZXJzaGlwX3RyYW5zZmVycmVkAAAAAAAAAgAAAAAAAAAJb2xkX293bmVyAAAAAAAAEwAAAAAAAAAAAAAACW5ld19vd25lcgAAAAAAABMAAAAAAAAAAg==",
+    "AAAABQAAADtFdmVudCBlbWl0dGVkIHdoZW4gYSAyLXN0ZXAgb3duZXJzaGlwIHRyYW5zZmVyIGlzIHByb3Bvc2VkLgAAAAAAAAAAFU93bmVyc2hpcFRyYW5zZmVycmluZwAAAAAAAAEAAAAWb3duZXJzaGlwX3RyYW5zZmVycmluZwAAAAAAAwAAAAAAAAAJb2xkX293bmVyAAAAAAAAEwAAAAAAAAAAAAAACW5ld19vd25lcgAAAAAAABMAAAAAAAAAAAAAAAN0dGwAAAAABAAAAAAAAAAC",
+    "AAAABQAAADxFdmVudCBlbWl0dGVkIHdoZW4gYSAyLXN0ZXAgb3duZXJzaGlwIHRyYW5zZmVyIGlzIGNhbmNlbGxlZC4AAAAAAAAAGk93bmVyc2hpcFRyYW5zZmVyQ2FuY2VsbGVkAAAAAAABAAAAHG93bmVyc2hpcF90cmFuc2Zlcl9jYW5jZWxsZWQAAAACAAAAAAAAAAVvd25lcgAAAAAAABMAAAAAAAAAAAAAABdjYW5jZWxsZWRfcGVuZGluZ19vd25lcgAAAAATAAAAAAAAAAI=",
+    "AAAABQAAACpFdmVudCBlbWl0dGVkIHdoZW4gb3duZXJzaGlwIGlzIHJlbm91bmNlZC4AAAAAAAAAAAAST3duZXJzaGlwUmVub3VuY2VkAAAAAAABAAAAE293bmVyc2hpcF9yZW5vdW5jZWQAAAAAAQAAAAAAAAAJb2xkX293bmVyAAAAAAAAEwAAAAAAAAAC",
+    "AAAAAgAAAAAAAAAAAAAADk93bmFibGVTdG9yYWdlAAAAAAACAAAAAAAAAAAAAAAFT3duZXIAAAAAAAAAAAAAAAAAAAxQZW5kaW5nT3duZXI=",
+    "AAAABQAAACVFdmVudCBlbWl0dGVkIHdoZW4gYSByb2xlIGlzIGdyYW50ZWQuAAAAAAAAAAAAAAtSb2xlR3JhbnRlZAAAAAABAAAADHJvbGVfZ3JhbnRlZAAAAAMAAAAAAAAABHJvbGUAAAARAAAAAQAAAAAAAAAHYWNjb3VudAAAAAATAAAAAQAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAAAAAAI=",
+    "AAAABQAAACVFdmVudCBlbWl0dGVkIHdoZW4gYSByb2xlIGlzIHJldm9rZWQuAAAAAAAAAAAAAAtSb2xlUmV2b2tlZAAAAAABAAAADHJvbGVfcmV2b2tlZAAAAAMAAAAAAAAABHJvbGUAAAARAAAAAQAAAAAAAAAHYWNjb3VudAAAAAATAAAAAQAAAAAAAAAGY2FsbGVyAAAAAAATAAAAAAAAAAI=",
+    "AAAABQAAACtFdmVudCBlbWl0dGVkIHdoZW4gYSByb2xlIGFkbWluIGlzIGNoYW5nZWQuAAAAAAAAAAAQUm9sZUFkbWluQ2hhbmdlZAAAAAEAAAAScm9sZV9hZG1pbl9jaGFuZ2VkAAAAAAADAAAAAAAAAARyb2xlAAAAEQAAAAEAAAAAAAAAE3ByZXZpb3VzX2FkbWluX3JvbGUAAAAD6AAAABEAAAAAAAAAAAAAAA5uZXdfYWRtaW5fcm9sZQAAAAAD6AAAABEAAAAAAAAAAg==",
+    "AAAAAgAAAAAAAAAAAAAAC1JiYWNTdG9yYWdlAAAAAAUAAAAAAAAAAAAAAA1FeGlzdGluZ1JvbGVzAAAAAAAAAQAAAAAAAAASUm9sZUluZGV4VG9BY2NvdW50AAAAAAACAAAAEQAAAAQAAAABAAAAAAAAABJSb2xlQWNjb3VudFRvSW5kZXgAAAAAAAIAAAARAAAAEwAAAAEAAAAAAAAAEVJvbGVBY2NvdW50c0NvdW50AAAAAAAAAQAAABEAAAABAAAAAAAAAAlSb2xlQWRtaW4AAAAAAAABAAAAEQ==",
+    "AAAAAQAAAElUVEwgY29uZmlndXJhdGlvbjogdGhyZXNob2xkICh3aGVuIHRvIGV4dGVuZCkgYW5kIGV4dGVuZF90byAodGFyZ2V0IFRUTCkuAAAAAAAAAAAAAAlUdGxDb25maWcAAAAAAAACAAAAKFRhcmdldCBUVEwgYWZ0ZXIgZXh0ZW5zaW9uIChpbiBsZWRnZXJzKS4AAAAJZXh0ZW5kX3RvAAAAAAAABAAAADNUVEwgdGhyZXNob2xkIHRoYXQgdHJpZ2dlcnMgZXh0ZW5zaW9uIChpbiBsZWRnZXJzKS4AAAAACXRocmVzaG9sZAAAAAAAAAQ=",
+    "AAAABQAAACdFdmVudCBlbWl0dGVkIHdoZW4gVFRMIGNvbmZpZ3MgYXJlIHNldC4AAAAAAAAAAA1UdGxDb25maWdzU2V0AAAAAAAAAQAAAA90dGxfY29uZmlnc19zZXQAAAAAAgAAAAAAAAAIaW5zdGFuY2UAAAPoAAAH0AAAAAlUdGxDb25maWcAAAAAAAAAAAAAAAAAAApwZXJzaXN0ZW50AAAAAAPoAAAH0AAAAAlUdGxDb25maWcAAAAAAAAAAAAAAg==",
+    "AAAABQAAACpFdmVudCBlbWl0dGVkIHdoZW4gVFRMIGNvbmZpZ3MgYXJlIGZyb3plbi4AAAAAAAAAAAAQVHRsQ29uZmlnc0Zyb3plbgAAAAEAAAASdHRsX2NvbmZpZ3NfZnJvemVuAAAAAAAAAAAAAg==",
+    "AAAAAgAAAAAAAAAAAAAAEFR0bENvbmZpZ1N0b3JhZ2UAAAADAAAAAAAAAAAAAAAGRnJvemVuAAAAAAAAAAAAAAAAAAhJbnN0YW5jZQAAAAAAAAAAAAAAClBlcnNpc3RlbnQAAA==",
+    "AAAAAgAAAAAAAAAAAAAAElVwZ3JhZGVhYmxlU3RvcmFnZQAAAAAAAQAAAAAAAAAAAAAACU1pZ3JhdGluZwAAAA=="
+  ]
+}
