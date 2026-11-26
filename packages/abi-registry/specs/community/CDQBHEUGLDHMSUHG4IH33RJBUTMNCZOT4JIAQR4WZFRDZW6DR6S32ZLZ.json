@@ -1,0 +1,303 @@
+{
+  "contractId": "CDQBHEUGLDHMSUHG4IH33RJBUTMNCZOT4JIAQR4WZFRDZW6DR6S32ZLZ",
+  "description": "Chainlink Data Feeds proxy contract on Stellar mainnet: the single read entry point for every Chainlink price feed on Stellar. Callers pass a feed data_id (e.g. XLM/USD, BTC/USD) to latest_round, get_round, decimals or description, and the proxy reads the round from its backing DataFeedsCache contract. Lending, prediction-market and perps protocols on Stellar consume Chainlink prices through it.",
+  "events": [
+    {
+      "data": [
+        { "name": "old_cache", "type": "address" },
+        { "name": "new_cache", "type": "address" }
+      ],
+      "name": "CacheSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"CacheSet\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "min", "type": "u32" }],
+      "name": "MinDecimalsSet",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"MinDecimalsSet\".",
+          "name": "event_name",
+          "type": "symbol"
+        },
+        { "name": "data_id", "type": { "size": 32, "type": "bytes_n" } }
+      ]
+    },
+    {
+      "data": [{ "name": "new_wasm_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "name": "Upgraded",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"Upgraded\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [
+        { "name": "token", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "name": "TokenRecovered",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"TokenRecovered\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [
+        { "name": "old_owner", "type": "address" },
+        { "name": "new_owner", "type": "address" },
+        { "name": "live_until_ledger", "type": "u32" }
+      ],
+      "doc": "Event emitted when an ownership transfer is initiated.",
+      "name": "OwnershipTransfer",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_transfer\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "old_owner", "type": "address" }],
+      "doc": "Event emitted when ownership is renounced.",
+      "name": "OwnershipRenounced",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_renounced\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    },
+    {
+      "data": [{ "name": "new_owner", "type": "address" }],
+      "doc": "Event emitted when an ownership transfer is completed.",
+      "name": "OwnershipTransferCompleted",
+      "topics": [
+        {
+          "doc": "Fixed prefix topic, always \"ownership_transfer_completed\".",
+          "name": "event_name",
+          "type": "symbol"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "upgrade",
+      "params": [{ "name": "new_wasm_hash", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": "void"
+    },
+    { "name": "version", "params": [], "returns": "u32" },
+    {
+      "name": "decimals",
+      "params": [{ "name": "data_id", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": {
+        "err": { "name": "ProxyReadError", "type": "named" },
+        "ok": "u32",
+        "type": "result"
+      }
+    },
+    { "name": "get_cache", "params": [], "returns": "address" },
+    {
+      "doc": "Returns `Some(Address)` if ownership is set, or `None` if ownership has\nbeen renounced.\n\n# Arguments\n\n* `e` - Access to the Soroban environment.",
+      "name": "get_owner",
+      "params": [],
+      "returns": { "inner": "address", "type": "option" }
+    },
+    {
+      "name": "get_round",
+      "params": [
+        { "name": "data_id", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "round_id", "type": "u64" },
+        { "name": "decimals", "type": "u32" }
+      ],
+      "returns": {
+        "err": { "name": "ProxyReadError", "type": "named" },
+        "ok": { "name": "Round", "type": "named" },
+        "type": "result"
+      }
+    },
+    { "name": "set_cache", "params": [{ "name": "cache", "type": "address" }], "returns": "void" },
+    {
+      "name": "description",
+      "params": [{ "name": "data_id", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": {
+        "err": { "name": "ProxyReadError", "type": "named" },
+        "ok": "string",
+        "type": "result"
+      }
+    },
+    {
+      "name": "latest_round",
+      "params": [
+        { "name": "data_id", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "decimals", "type": "u32" }
+      ],
+      "returns": {
+        "err": { "name": "ProxyReadError", "type": "named" },
+        "ok": { "name": "Round", "type": "named" },
+        "type": "result"
+      }
+    },
+    {
+      "name": "__constructor",
+      "params": [
+        { "name": "owner", "type": "address" },
+        { "name": "cache", "type": "address" }
+      ],
+      "returns": "void"
+    },
+    {
+      "name": "recover_tokens",
+      "params": [
+        { "name": "token", "type": "address" },
+        { "name": "to", "type": "address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": "void"
+    },
+    {
+      "doc": "Accepts a pending ownership transfer.\n\n# Arguments\n\n* `e` - Access to the Soroban environment.\n\n# Errors\n\n* [`crate::role_transfer::RoleTransferError::NoPendingTransfer`] - If\nthere is no pending transfer to accept.\n\n# Events\n\n* topics - `[\"ownership_transfer_completed\"]`\n* data - `[new_owner: Address]`",
+      "name": "accept_ownership",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "name": "get_min_decimals",
+      "params": [{ "name": "data_id", "type": { "size": 32, "type": "bytes_n" } }],
+      "returns": "u32"
+    },
+    {
+      "name": "set_min_decimals",
+      "params": [
+        { "name": "data_id", "type": { "size": 32, "type": "bytes_n" } },
+        { "name": "min", "type": "u32" }
+      ],
+      "returns": {
+        "err": { "name": "ProxyReadError", "type": "named" },
+        "ok": "void",
+        "type": "result"
+      }
+    },
+    { "name": "type_and_version", "params": [], "returns": "string" },
+    {
+      "doc": "Renounces ownership of the contract.\n\nPermanently removes the owner, disabling all functions gated by\n`#[only_owner]`.\n\n# Arguments\n\n* `e` - Access to the Soroban environment.\n\n# Errors\n\n* [`OwnableError::TransferInProgress`] - If there is a pending ownership\ntransfer.\n* [`OwnableError::OwnerNotSet`] - If the owner is not set.\n\n# Notes\n\n* Authorization for the current owner is required.",
+      "name": "renounce_ownership",
+      "params": [],
+      "returns": "void"
+    },
+    {
+      "doc": "Initiates a 2-step ownership transfer to a new address.\n\nRequires authorization from the current owner. The new owner must later\ncall `accept_ownership()` to complete the transfer.\n\n# Arguments\n\n* `e` - Access to the Soroban environment.\n* `new_owner` - The proposed new owner.\n* `live_until_ledger` - Ledger number until which the new owner can\naccept. A value of `0` cancels any pending transfer.\n\n# Errors\n\n* [`OwnableError::OwnerNotSet`] - If the owner is not set.\n* [`crate::role_transfer::RoleTransferError::NoPendingTransfer`] - If\ntrying to cancel a transfer that doesn't exist.\n* [`crate::role_transfer::RoleTransferError::InvalidLiveUntilLedger`] -\nIf the specified ledger is in the past.\n* [`crate::role_transfer::RoleTransferError::InvalidPendingAccount`] -\nIf the specified pending account is not the same as the provided `new`\naddress.\n\n# Notes\n\n* Authorization for the current owner is required.",
+      "name": "transfer_ownership",
+      "params": [
+        { "name": "new_owner", "type": "address" },
+        { "name": "live_until_ledger", "type": "u32" }
+      ],
+      "returns": "void"
+    }
+  ],
+  "name": "Chainlink Data Feeds Proxy",
+  "network": "mainnet",
+  "types": {
+    "CacheError": {
+      "kind": "enum",
+      "name": "CacheError",
+      "variants": [
+        { "discriminant": 100, "name": "MalformedReport" },
+        { "discriminant": 101, "name": "UnauthorizedCaller" },
+        { "discriminant": 102, "name": "FeedNotConfigured" },
+        { "discriminant": 103, "name": "EmptyConfig" },
+        { "discriminant": 104, "name": "InvalidAddress" },
+        { "discriminant": 105, "name": "InvalidWorkflowName" },
+        { "discriminant": 106, "name": "DuplicatePermission" },
+        { "discriminant": 107, "name": "InvalidDataId" },
+        { "discriminant": 108, "name": "DuplicateFeedConfig" },
+        { "discriminant": 109, "name": "FeedFrozen" },
+        { "discriminant": 110, "name": "NoFeedState" }
+      ]
+    },
+    "OwnableError": {
+      "kind": "enum",
+      "name": "OwnableError",
+      "variants": [
+        { "discriminant": 2100, "name": "OwnerNotSet" },
+        { "discriminant": 2101, "name": "TransferInProgress" },
+        { "discriminant": 2102, "name": "OwnerAlreadySet" }
+      ]
+    },
+    "ProxyReadError": {
+      "kind": "enum",
+      "name": "ProxyReadError",
+      "variants": [
+        { "discriminant": 50, "name": "NoDataPresent" },
+        { "discriminant": 51, "name": "InvalidDecimals" },
+        { "discriminant": 52, "name": "RoundsToZero" }
+      ]
+    },
+    "RoleTransferError": {
+      "kind": "enum",
+      "name": "RoleTransferError",
+      "variants": [
+        { "discriminant": 2200, "name": "NoPendingTransfer" },
+        { "discriminant": 2201, "name": "InvalidLiveUntilLedger" },
+        { "discriminant": 2202, "name": "InvalidPendingAccount" },
+        { "discriminant": 2203, "name": "TransferExpired" }
+      ]
+    },
+    "Round": {
+      "fields": [
+        { "name": "answer", "type": "i256" },
+        { "name": "round_id", "type": "u64" },
+        { "name": "timestamp", "type": "u64" }
+      ],
+      "kind": "struct",
+      "name": "Round"
+    }
+  },
+  "version": "0.0.0",
+  "xdrEntries": [
+    "AAAABQAAAAAAAAAAAAAACENhY2hlU2V0AAAAAQAAAAhDYWNoZVNldAAAAAIAAAAAAAAACW9sZF9jYWNoZQAAAAAAABMAAAAAAAAAAAAAAAluZXdfY2FjaGUAAAAAAAATAAAAAAAAAAI=",
+    "AAAABQAAAAAAAAAAAAAADk1pbkRlY2ltYWxzU2V0AAAAAAABAAAADk1pbkRlY2ltYWxzU2V0AAAAAAACAAAAAAAAAAdkYXRhX2lkAAAAA+4AAAAgAAAAAQAAAAAAAAADbWluAAAAAAQAAAAAAAAAAg==",
+    "AAAAAAAAAAAAAAAHdXBncmFkZQAAAAABAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAAA",
+    "AAAAAAAAAAAAAAAHdmVyc2lvbgAAAAAAAAAAAQAAAAQ=",
+    "AAAAAAAAAAAAAAAIZGVjaW1hbHMAAAABAAAAAAAAAAdkYXRhX2lkAAAAA+4AAAAgAAAAAQAAA+kAAAAEAAAH0AAAAA5Qcm94eVJlYWRFcnJvcgAA",
+    "AAAAAAAAAAAAAAAJZ2V0X2NhY2hlAAAAAAAAAAAAAAEAAAAT",
+    "AAAAAAAAAJBSZXR1cm5zIGBTb21lKEFkZHJlc3MpYCBpZiBvd25lcnNoaXAgaXMgc2V0LCBvciBgTm9uZWAgaWYgb3duZXJzaGlwIGhhcwpiZWVuIHJlbm91bmNlZC4KCiMgQXJndW1lbnRzCgoqIGBlYCAtIEFjY2VzcyB0byB0aGUgU29yb2JhbiBlbnZpcm9ubWVudC4AAAAJZ2V0X293bmVyAAAAAAAAAAAAAAEAAAPoAAAAEw==",
+    "AAAAAAAAAAAAAAAJZ2V0X3JvdW5kAAAAAAAAAwAAAAAAAAAHZGF0YV9pZAAAAAPuAAAAIAAAAAAAAAAIcm91bmRfaWQAAAAGAAAAAAAAAAhkZWNpbWFscwAAAAQAAAABAAAD6QAAB9AAAAAFUm91bmQAAAAAAAfQAAAADlByb3h5UmVhZEVycm9yAAA=",
+    "AAAAAAAAAAAAAAAJc2V0X2NhY2hlAAAAAAAAAQAAAAAAAAAFY2FjaGUAAAAAAAATAAAAAA==",
+    "AAAAAAAAAAAAAAALZGVzY3JpcHRpb24AAAAAAQAAAAAAAAAHZGF0YV9pZAAAAAPuAAAAIAAAAAEAAAPpAAAAEAAAB9AAAAAOUHJveHlSZWFkRXJyb3IAAA==",
+    "AAAAAAAAAAAAAAAMbGF0ZXN0X3JvdW5kAAAAAgAAAAAAAAAHZGF0YV9pZAAAAAPuAAAAIAAAAAAAAAAIZGVjaW1hbHMAAAAEAAAAAQAAA+kAAAfQAAAABVJvdW5kAAAAAAAH0AAAAA5Qcm94eVJlYWRFcnJvcgAA",
+    "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAIAAAAAAAAABW93bmVyAAAAAAAAEwAAAAAAAAAFY2FjaGUAAAAAAAATAAAAAA==",
+    "AAAAAAAAAAAAAAAOcmVjb3Zlcl90b2tlbnMAAAAAAAMAAAAAAAAABXRva2VuAAAAAAAAEwAAAAAAAAACdG8AAAAAABMAAAAAAAAABmFtb3VudAAAAAAACwAAAAA=",
+    "AAAAAAAAATBBY2NlcHRzIGEgcGVuZGluZyBvd25lcnNoaXAgdHJhbnNmZXIuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCgojIEVycm9ycwoKKiBbYGNyYXRlOjpyb2xlX3RyYW5zZmVyOjpSb2xlVHJhbnNmZXJFcnJvcjo6Tm9QZW5kaW5nVHJhbnNmZXJgXSAtIElmCnRoZXJlIGlzIG5vIHBlbmRpbmcgdHJhbnNmZXIgdG8gYWNjZXB0LgoKIyBFdmVudHMKCiogdG9waWNzIC0gYFsib3duZXJzaGlwX3RyYW5zZmVyX2NvbXBsZXRlZCJdYAoqIGRhdGEgLSBgW25ld19vd25lcjogQWRkcmVzc11gAAAAEGFjY2VwdF9vd25lcnNoaXAAAAAAAAAAAA==",
+    "AAAAAAAAAAAAAAAQZ2V0X21pbl9kZWNpbWFscwAAAAEAAAAAAAAAB2RhdGFfaWQAAAAD7gAAACAAAAABAAAABA==",
+    "AAAAAAAAAAAAAAAQc2V0X21pbl9kZWNpbWFscwAAAAIAAAAAAAAAB2RhdGFfaWQAAAAD7gAAACAAAAAAAAAAA21pbgAAAAAEAAAAAQAAA+kAAAACAAAH0AAAAA5Qcm94eVJlYWRFcnJvcgAA",
+    "AAAAAAAAAAAAAAAQdHlwZV9hbmRfdmVyc2lvbgAAAAAAAAABAAAAEA==",
+    "AAAAAAAAAYVSZW5vdW5jZXMgb3duZXJzaGlwIG9mIHRoZSBjb250cmFjdC4KClBlcm1hbmVudGx5IHJlbW92ZXMgdGhlIG93bmVyLCBkaXNhYmxpbmcgYWxsIGZ1bmN0aW9ucyBnYXRlZCBieQpgI1tvbmx5X293bmVyXWAuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCgojIEVycm9ycwoKKiBbYE93bmFibGVFcnJvcjo6VHJhbnNmZXJJblByb2dyZXNzYF0gLSBJZiB0aGVyZSBpcyBhIHBlbmRpbmcgb3duZXJzaGlwCnRyYW5zZmVyLgoqIFtgT3duYWJsZUVycm9yOjpPd25lck5vdFNldGBdIC0gSWYgdGhlIG93bmVyIGlzIG5vdCBzZXQuCgojIE5vdGVzCgoqIEF1dGhvcml6YXRpb24gZm9yIHRoZSBjdXJyZW50IG93bmVyIGlzIHJlcXVpcmVkLgAAAAAAABJyZW5vdW5jZV9vd25lcnNoaXAAAAAAAAAAAAAA",
+    "AAAAAAAAA45Jbml0aWF0ZXMgYSAyLXN0ZXAgb3duZXJzaGlwIHRyYW5zZmVyIHRvIGEgbmV3IGFkZHJlc3MuCgpSZXF1aXJlcyBhdXRob3JpemF0aW9uIGZyb20gdGhlIGN1cnJlbnQgb3duZXIuIFRoZSBuZXcgb3duZXIgbXVzdCBsYXRlcgpjYWxsIGBhY2NlcHRfb3duZXJzaGlwKClgIHRvIGNvbXBsZXRlIHRoZSB0cmFuc2Zlci4KCiMgQXJndW1lbnRzCgoqIGBlYCAtIEFjY2VzcyB0byB0aGUgU29yb2JhbiBlbnZpcm9ubWVudC4KKiBgbmV3X293bmVyYCAtIFRoZSBwcm9wb3NlZCBuZXcgb3duZXIuCiogYGxpdmVfdW50aWxfbGVkZ2VyYCAtIExlZGdlciBudW1iZXIgdW50aWwgd2hpY2ggdGhlIG5ldyBvd25lciBjYW4KYWNjZXB0LiBBIHZhbHVlIG9mIGAwYCBjYW5jZWxzIGFueSBwZW5kaW5nIHRyYW5zZmVyLgoKIyBFcnJvcnMKCiogW2BPd25hYmxlRXJyb3I6Ok93bmVyTm90U2V0YF0gLSBJZiB0aGUgb3duZXIgaXMgbm90IHNldC4KKiBbYGNyYXRlOjpyb2xlX3RyYW5zZmVyOjpSb2xlVHJhbnNmZXJFcnJvcjo6Tm9QZW5kaW5nVHJhbnNmZXJgXSAtIElmCnRyeWluZyB0byBjYW5jZWwgYSB0cmFuc2ZlciB0aGF0IGRvZXNuJ3QgZXhpc3QuCiogW2BjcmF0ZTo6cm9sZV90cmFuc2Zlcjo6Um9sZVRyYW5zZmVyRXJyb3I6OkludmFsaWRMaXZlVW50aWxMZWRnZXJgXSAtCklmIHRoZSBzcGVjaWZpZWQgbGVkZ2VyIGlzIGluIHRoZSBwYXN0LgoqIFtgY3JhdGU6OnJvbGVfdHJhbnNmZXI6OlJvbGVUcmFuc2ZlckVycm9yOjpJbnZhbGlkUGVuZGluZ0FjY291bnRgXSAtCklmIHRoZSBzcGVjaWZpZWQgcGVuZGluZyBhY2NvdW50IGlzIG5vdCB0aGUgc2FtZSBhcyB0aGUgcHJvdmlkZWQgYG5ld2AKYWRkcmVzcy4KCiMgTm90ZXMKCiogQXV0aG9yaXphdGlvbiBmb3IgdGhlIGN1cnJlbnQgb3duZXIgaXMgcmVxdWlyZWQuAAAAAAASdHJhbnNmZXJfb3duZXJzaGlwAAAAAAACAAAAAAAAAAluZXdfb3duZXIAAAAAAAATAAAAAAAAABFsaXZlX3VudGlsX2xlZGdlcgAAAAAAAAQAAAAA",
+    "AAAAAQAAAAAAAAAAAAAABVJvdW5kAAAAAAAAAwAAAAAAAAAGYW5zd2VyAAAAAAANAAAAAAAAAAhyb3VuZF9pZAAAAAYAAAAAAAAACXRpbWVzdGFtcAAAAAAAAAY=",
+    "AAAABAAAAAAAAAAAAAAADlByb3h5UmVhZEVycm9yAAAAAAADAAAAAAAAAA1Ob0RhdGFQcmVzZW50AAAAAAAAMgAAAAAAAAAPSW52YWxpZERlY2ltYWxzAAAAADMAAAAAAAAADFJvdW5kc1RvWmVybwAAADQ=",
+    "AAAABAAAAAAAAAAAAAAACkNhY2hlRXJyb3IAAAAAAAsAAAAAAAAAD01hbGZvcm1lZFJlcG9ydAAAAABkAAAAAAAAABJVbmF1dGhvcml6ZWRDYWxsZXIAAAAAAGUAAAAAAAAAEUZlZWROb3RDb25maWd1cmVkAAAAAAAAZgAAAAAAAAALRW1wdHlDb25maWcAAAAAZwAAAAAAAAAOSW52YWxpZEFkZHJlc3MAAAAAAGgAAAAAAAAAE0ludmFsaWRXb3JrZmxvd05hbWUAAAAAaQAAAAAAAAATRHVwbGljYXRlUGVybWlzc2lvbgAAAABqAAAAAAAAAA1JbnZhbGlkRGF0YUlkAAAAAAAAawAAAAAAAAATRHVwbGljYXRlRmVlZENvbmZpZwAAAABsAAAAAAAAAApGZWVkRnJvemVuAAAAAABtAAAAAAAAAAtOb0ZlZWRTdGF0ZQAAAABu",
+    "AAAABQAAAAAAAAAAAAAACFVwZ3JhZGVkAAAAAQAAAAhVcGdyYWRlZAAAAAEAAAAAAAAADW5ld193YXNtX2hhc2gAAAAAAAPuAAAAIAAAAAAAAAAC",
+    "AAAABQAAAAAAAAAAAAAADlRva2VuUmVjb3ZlcmVkAAAAAAABAAAADlRva2VuUmVjb3ZlcmVkAAAAAAADAAAAAAAAAAV0b2tlbgAAAAAAABMAAAAAAAAAAAAAAAJ0bwAAAAAAEwAAAAAAAAAAAAAABmFtb3VudAAAAAAACwAAAAAAAAAC",
+    "AAAABAAAAAAAAAAAAAAAEVJvbGVUcmFuc2ZlckVycm9yAAAAAAAABAAAAAAAAAARTm9QZW5kaW5nVHJhbnNmZXIAAAAAAAiYAAAAAAAAABZJbnZhbGlkTGl2ZVVudGlsTGVkZ2VyAAAAAAiZAAAAAAAAABVJbnZhbGlkUGVuZGluZ0FjY291bnQAAAAAAAiaAAAAAAAAAA9UcmFuc2ZlckV4cGlyZWQAAAAImw==",
+    "AAAABAAAAAAAAAAAAAAADE93bmFibGVFcnJvcgAAAAMAAAAAAAAAC093bmVyTm90U2V0AAAACDQAAAAAAAAAElRyYW5zZmVySW5Qcm9ncmVzcwAAAAAINQAAAAAAAAAPT3duZXJBbHJlYWR5U2V0AAAACDY=",
+    "AAAABQAAADZFdmVudCBlbWl0dGVkIHdoZW4gYW4gb3duZXJzaGlwIHRyYW5zZmVyIGlzIGluaXRpYXRlZC4AAAAAAAAAAAART3duZXJzaGlwVHJhbnNmZXIAAAAAAAABAAAAEm93bmVyc2hpcF90cmFuc2ZlcgAAAAAAAwAAAAAAAAAJb2xkX293bmVyAAAAAAAAEwAAAAAAAAAAAAAACW5ld19vd25lcgAAAAAAABMAAAAAAAAAAAAAABFsaXZlX3VudGlsX2xlZGdlcgAAAAAAAAQAAAAAAAAAAg==",
+    "AAAABQAAACpFdmVudCBlbWl0dGVkIHdoZW4gb3duZXJzaGlwIGlzIHJlbm91bmNlZC4AAAAAAAAAAAAST3duZXJzaGlwUmVub3VuY2VkAAAAAAABAAAAE293bmVyc2hpcF9yZW5vdW5jZWQAAAAAAQAAAAAAAAAJb2xkX293bmVyAAAAAAAAEwAAAAAAAAAC",
+    "AAAABQAAADZFdmVudCBlbWl0dGVkIHdoZW4gYW4gb3duZXJzaGlwIHRyYW5zZmVyIGlzIGNvbXBsZXRlZC4AAAAAAAAAAAAaT3duZXJzaGlwVHJhbnNmZXJDb21wbGV0ZWQAAAAAAAEAAAAcb3duZXJzaGlwX3RyYW5zZmVyX2NvbXBsZXRlZAAAAAEAAAAAAAAACW5ld19vd25lcgAAAAAAABMAAAAAAAAAAg=="
+  ]
+}
