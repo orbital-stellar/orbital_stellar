@@ -51,10 +51,35 @@ const SEP31_STAGE: Record<Sep31Status, AnchorFlowStage> = {
   error: "failed",
 };
 
+/**
+ * Maps a SEP-24 transaction status onto the coarse lifecycle stage carried by
+ * normalized anchor events.
+ *
+ * `incomplete` maps to `initiated`, every `pending_*` status to `pending`,
+ * `completed` and `refunded` keep their names, and the terminal problems
+ * (`expired`, `no_market`, `too_small`, `too_large`, `error`) map to `failed`.
+ * Use it to branch on where a deposit or withdrawal is in its lifecycle when
+ * the exact anchor status does not matter; read `protocolStatus` on the event
+ * when it does.
+ *
+ * @param status - The SEP-24 status exactly as the anchor reported it.
+ */
 export function sep24Stage(status: Sep24Status): AnchorFlowStage {
   return SEP24_STAGE[status];
 }
 
+/**
+ * Maps a SEP-31 payment status onto the coarse lifecycle stage carried by
+ * normalized anchor events.
+ *
+ * `pending_sender` maps to `initiated`, the remaining `pending_*` statuses
+ * (`pending_transaction_info_update`, `pending_stellar`, `pending_receiver`,
+ * `pending_external`) to `pending`, `completed` to `completed` and `error` to
+ * `failed`. Use it to branch on a cross-border payment's progress without
+ * matching every protocol status.
+ *
+ * @param status - The SEP-31 status exactly as the anchor reported it.
+ */
 export function sep31Stage(status: Sep31Status): AnchorFlowStage {
   return SEP31_STAGE[status];
 }
@@ -83,8 +108,15 @@ function withTimestampDate<T extends { timestamp: string }>(event: T): T & { tim
   return event as T & { timestampDate: Date };
 }
 
+/**
+ * Inputs for {@link normalizeSep24Transaction}.
+ *
+ * Everything a SEP-24 transaction itself carries (id, status, amounts,
+ * timestamps) is read from the transaction; this type only supplies what the
+ * transaction does not.
+ */
 export type NormalizeSep24Options = {
-  /** Base URL of the anchor, recorded on the event. */
+  /** Base URL of the anchor, recorded verbatim on the event. */
   anchorUrl: string;
 };
 
@@ -122,17 +154,31 @@ export function normalizeSep24Transaction(
   return withTimestampDate(event) as AnchorFlowEvent;
 }
 
+/**
+ * Inputs for {@link normalizeSep31Status}.
+ *
+ * SEP-31 gives the SDK a status plus whatever the caller already knows about
+ * the payment, so unlike the SEP-24 normalizer the transaction id and the
+ * optional amounts arrive here rather than on a transaction object.
+ */
 export type NormalizeSep31Options = {
+  /** Base URL of the anchor, recorded verbatim on the event. */
   anchorUrl: string;
   /** The transaction id, which SEP-31 returns separately from the status. */
   transactionId: string;
-  /** Settlement hash, when the anchor exposed one. */
+  /** Settlement hash, when the anchor exposed one; `null` is stored as "no hash". */
   stellarTransactionId?: string | null;
+  /** Amount the sender paid, as the anchor's decimal string. */
   amountIn?: string;
+  /** Amount the receiver gets, as the anchor's decimal string. */
   amountOut?: string;
+  /** Fee the anchor charged, as the anchor's decimal string. */
   amountFee?: string;
+  /** Message the anchor attached to the status, if any. */
   message?: string;
+  /** Event timestamp; defaults to the current time when omitted. */
   timestamp?: string;
+  /** Raw payload to attach to the event as `raw`. */
   raw?: unknown;
 };
 
